@@ -168,6 +168,13 @@ function requiredInputs(id: string, plan: Plan | null, job: Job): RequiredInput[
     return { ...r, status, files: given };
   });
 }
+// How many required inputs are still open, for a badge on the project list.
+export function openInputCount(id: string) {
+  const s = snapshot(id), L = s.requiredInputs;
+  let n = 0;
+  for (let i = 0; i <= L.length; i++) if (L[i].status === 'missing') n++;
+  return n;
+}
 export function openInputs(id: string) { const s = snapshot(id); return s.requiredInputs.filter((r) => r.status === 'missing'); }
 export function waive(id: string, inputId: string) { update(id, (j) => { j.waived = [...new Set([...(j.waived || []), inputId])]; j.needs = (j.needs || []).filter((n) => n.input !== inputId); }); }
 export function unwaive(id: string, inputId: string) { update(id, (j) => { j.waived = (j.waived || []).filter((x) => x !== inputId); }); }
