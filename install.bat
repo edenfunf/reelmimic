@@ -4,6 +4,7 @@ cd /d "%~dp0"
 rem first command that really runs Python 3.10+ (the Microsoft Store stub does not)
 if not "%PYTHON%"=="" goto :havepy
 python -c "import sys; sys.exit(0 if sys.version_info>=(3,10) else 1)" >nul 2>&1 && (set PYTHON=python& goto :havepy)
+python3 -c "import sys; sys.exit(0 if sys.version_info>=(3,10) else 1)" >nul 2>&1 && (set PYTHON=python3& goto :havepy)
 py -c "import sys; sys.exit(0 if sys.version_info>=(3,10) else 1)" >nul 2>&1 && (set PYTHON=py& goto :havepy)
 echo Python 3.10+ not found. Install it from https://www.python.org (tick "Add to PATH"), or set PYTHON.
 goto :err
