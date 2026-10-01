@@ -102,7 +102,8 @@ export function runAgent({ kind, cwd, prompt, sessionId, onEvent = () => {}, sig
     const args = isClaude ? claudeArgs(sessionId) : codexArgs(sessionId, cwd);
     // Windows: npm shims (claude.cmd) need a shell; args are fixed literals, the prompt goes through stdin.
     const child = spawn(cmd, args, { cwd, shell: IS_WIN, env: { ...process.env, HYPERFRAMES_NO_TELEMETRY: '1', DO_NOT_TRACK: '1' } });
-    if (signal) signal.addEventListener('abort', () => { try { IS_WIN ? spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']) : child.kill('SIGTERM'); } catch {} });
+    const stop = () => { try { IS_WIN ? spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']) : child.kill('SIGTERM'); } catch {} };
+    if (signal?.aborted) stop(); else signal?.addEventListener('abort', stop, { once: true });   // 'abort' never fires on an already-aborted signal
     lines(child.stdout, (l) => {
       let obj: Json; try { obj = JSON.parse(l); } catch { return; }
       (isClaude ? parseClaude : parseCodex)(obj, emit, st);

@@ -21,6 +21,7 @@ interface Scenario {
   castShared?: (char: string, call: number) => boolean;
   critique: (round: number) => { must?: number; needs?: number };
   buildDelayMs?: number;                                   // let the per-shot watcher (every 4 s) pick shots up
+  onCall?: (name: string) => void;                         // runs as each turn starts (e.g. the user clicks Cancel)
 }
 let S: Scenario;
 let calls: string[] = [];
@@ -79,6 +80,7 @@ async function fakeAgent({ cwd, prompt, onEvent }: AgentRun) {
   const dir = resolve(cwd, prompt.match(/專案資料夾：(\S+?)[（。]/)![1]);
   const [name, files] = outputs(prompt, dir);
   calls.push(name);
+  S.onCall?.(name);
   if (name.startsWith('build:') && S.buildDelayMs) {   // shot files first, the segment file after the delay
     const entries = Object.entries(files), last = entries.pop()!;
     for (const [f, v] of entries) put(dir, f, v);
@@ -257,5 +259,25 @@ describe('pauses', () => {
     assert.deepEqual(calls, ['replan']);
     assert.equal(J.load(id).stage, 'plan_review');
     assert.equal(JSON.parse(readFileSync(join(J.dirOf(id), 'plan.json'), 'utf8')).version, 3);
+  });
+});
+
+describe('cancel', () => {
+  test('cancel during the shot line starts no more segments, and retry carries on', async () => {
+    const chunks = Array.from({ length: 10 }, (_, i) => ({ id: `C${i + 1}`, shots: [`S${i + 1}`] }));
+    let id = '';
+    S = base({ chunks, onCall: (name) => { if (name === 'build:C1') J.cancel(id); } });
+    id = newProject('plan_review');
+    await J.approve(id);
+    const j = J.load(id);
+    assert.equal(j.stage, 'error');
+    assert.equal(j.failed, 'producing');
+    assert.equal(j.error, '已取消');
+    const builds = calls.filter((c) => c.startsWith('build:')).length;
+    assert.ok(builds <= J.CONFIG.builders, `${builds} segments started after cancel`);
+    assert.ok(!calls.includes('assemble'));
+    S.onCall = undefined; calls = [];
+    await J.retry(id);
+    assert.equal(J.load(id).stage, 'done', J.load(id).error || '');
   });
 });
