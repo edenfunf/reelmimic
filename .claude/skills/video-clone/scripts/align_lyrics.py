@@ -88,13 +88,14 @@ def main():
         while j < len(out) and out[j]["start"] is None: j += 1   # out[k:j] found nothing
         s0 = out[k - 1]["end"] if k else 0.0
         s1 = out[j]["start"] if j < len(out) else (rec[-1][2] if rec else s0)
-        step = (s1 - s0) / (j - k) if s1 > s0 else 2.0
+        step = (s1 - s0) / (j - k)
+        if step < 1.0: step = 2.0   # no real gap (or a tiny one): give each line time to be read
         for n in range(j - k): out[k + n].update(start=s0 + n * step, end=s0 + (n + 1) * step, interpolated=True)
         k = j
-    # keep order monotonic, and no line ending before it starts
-    for k in range(1, len(out)):
-        if out[k]["start"] < out[k - 1]["start"]: out[k]["start"] = out[k - 1]["end"]
-    for o in out: o["end"] = max(o["end"], o["start"])
+    # keep order monotonic, and no line ending before it starts (in one pass, so each line sees the fixed previous one)
+    for k, o in enumerate(out):
+        if k and o["start"] < out[k - 1]["start"]: o["start"] = out[k - 1]["end"]
+        o["end"] = max(o["end"], o["start"])
     with open(a.out, "w", encoding="utf-8") as f:
         for o in out: f.write(f"{fmt(o['start'])}{o['text']}\n")
     json.dump({"clip_start": a.start, "lines": out}, open(os.path.splitext(a.out)[0] + ".json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
