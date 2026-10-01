@@ -1,9 +1,9 @@
 // ReelMimic server: REST + SSE over the job machine in jobs.ts, and static files (the built UI and project files).
 //   node server/index.ts             → http://localhost:4318
 import './env.ts';   // first: API keys / tool paths from ~/.reelmimic/secrets.json
-import express, { type Request, type Response } from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
-import { existsSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync, unlinkSync } from 'node:fs';
 import { join, extname, resolve, sep } from 'node:path';
 import type { AgentStatus } from '../shared/types.ts';
 import { agentStatus } from './agents/index.ts';
@@ -21,7 +21,13 @@ const slug = () => new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-'
 // multer hands over multipart filenames as latin1; browsers send UTF-8
 type Upload = Express.Multer.File;
 const fileName = (f: Upload) => safeName(Buffer.from(f.originalname, 'latin1').toString('utf8'));
-const safeName = (n: string) => n.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 120);
+// Linux allows 255 bytes per file name and 120 CJK characters are 360: trim by bytes (room for the attachment prefix),
+// whole characters only, and keep the extension (the music is found by it)
+const safeName = (n: string) => {
+  const s = n.replace(/[\\/:*?"<>|]+/g, '_'), e = extname(s), ext = e.length <= 20 ? e : '', base = [...s.slice(0, s.length - ext.length)];
+  while (base.length && Buffer.byteLength(base.join('') + ext) > 200) base.pop();
+  return base.join('') + ext;
+};
 const isUrl = (s: string | undefined) => /^https?:\/\/\S+$/i.test((s || '').trim());
 const guard = (res: Response, id: string) => { if (!/^[\w-]+$/.test(id) || !existsSync(join(J.dirOf(id), 'job.json'))) { res.status(404).json({ error: 'no such project' }); return false; } return true; };
 
@@ -43,8 +49,14 @@ app.post('/api/projects', upload.fields([{ name: 'reference', maxCount: 1 }, { n
   const id = slug();
   const job = J.createJob({ id, title: (title || brief.split('\n')[0] || '未命名').slice(0, 40), agent, brief, lang, settings,
     reference: ref ? { type: 'file', src: 'inputs/reference' + (extname(ref.originalname) || '.mp4') } : { type: 'url', src: url.trim() } });
-  if (ref) renameSync(ref.path, join(J.dirOf(id), job.reference.src));
-  for (const f of files?.inputs || []) renameSync(f.path, join(J.dirOf(id), 'inputs', fileName(f)));
+  try {
+    if (ref) renameSync(ref.path, join(J.dirOf(id), job.reference.src));
+    for (const f of files?.inputs || []) renameSync(f.path, join(J.dirOf(id), 'inputs', fileName(f)));
+  } catch (e) {   // don't leave a project that never starts
+    rmSync(J.dirOf(id), { recursive: true, force: true });
+    for (const f of Object.values(files || {}).flat()) try { unlinkSync(f.path); } catch {}
+    return res.status(500).json({ error: (e as Error).message });
+  }
   J.start(id).catch((e) => console.error(e));
   res.json({ id });
 });
@@ -53,7 +65,7 @@ app.get('/api/projects/:id', (req, res) => { if (guard(res, req.params.id)) res.
 
 // Extra inputs later (e.g. the user finds their song file during plan review).
 // ?to=attachments → chat attachments (inputs/attachments/, timestamped so repeats don't overwrite); returns the saved paths
-app.post('/api/projects/:id/inputs', upload.array('inputs', 20), async (req, res) => {
+app.post('/api/projects/:id/inputs', upload.array('inputs', 20), async (req, res, next) => { try {
   if (!guard(res, req.params.id)) return;
   const attach = req.query.to === 'attachments', sub = attach ? join('inputs', 'attachments') : 'inputs';
   mkdirSync(join(J.dirOf(req.params.id), sub), { recursive: true });
@@ -67,7 +79,7 @@ app.post('/api/projects/:id/inputs', upload.array('inputs', 20), async (req, res
   else if (!attach) J.alignIfReady(req.params.id).catch(() => null);   // background: lyrics waiting for music
   J.touch(req.params.id);
   res.json({ ...J.snapshot(req.params.id), saved });
-});
+} catch (e) { for (const f of (req.files as Upload[] | undefined) || []) try { unlinkSync(f.path); } catch {} next(e); } });
 
 const act = (fn: (id: string, text: string, meta: J.MessageMeta) => unknown) => (req: Request<{ id: string }>, res: Response) => {
   const { id } = req.params; if (!guard(res, id)) return;
@@ -85,11 +97,11 @@ app.post('/api/projects/:id/approve', (req, res) => {
   J.approve(id).catch((e) => console.error(e)); res.json({ ok: true });
 });
 // Lyrics: the user pastes the text; the server times it against the plan's music section.
-app.post('/api/projects/:id/lyrics', async (req, res) => {
+app.post('/api/projects/:id/lyrics', async (req, res, next) => { try {
   const { id } = req.params; if (!guard(res, id)) return;
   const text = (req.body?.text || '').trim(); if (!text) return res.status(400).json({ error: '請貼上歌詞文字' });
   res.json(await J.saveLyrics(id, text));
-});
+} catch (e) { next(e); } });
 app.post('/api/projects/:id/waive', (req, res) => { const { id } = req.params; if (!guard(res, id)) return; J.waive(id, String(req.body?.input || '')); res.json(J.snapshot(id)); });
 app.post('/api/projects/:id/unwaive', (req, res) => { const { id } = req.params; if (!guard(res, id)) return; J.unwaive(id, String(req.body?.input || '')); res.json(J.snapshot(id)); });
 app.post('/api/projects/:id/resume', act(J.resume));
@@ -125,6 +137,13 @@ app.get<'/files/:id/*', { id: string; 0: string }>('/files/:id/*', (req, res) =>
 // The built UI (npm run build → app/dist); in dev, Vite serves it and proxies /api and /files here.
 const dist = join(import.meta.dirname, '..', 'dist');
 if (existsSync(dist)) { app.use(express.static(dist)); app.get(/^\/(?!api|files).*/, (req, res) => res.sendFile(join(dist, 'index.html'))); }
+
+// Errors from handlers (async ones pass them to next(), since Express 4 doesn't catch rejected promises): JSON, like the rest of the API
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error(err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: err.message });
+});
 
 J.recoverOrphans();
 app.listen(PORT, '127.0.0.1', () => console.log(`ReelMimic → http://localhost:${PORT}`));
