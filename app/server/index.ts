@@ -127,4 +127,11 @@ const dist = join(import.meta.dirname, '..', 'dist');
 if (existsSync(dist)) { app.use(express.static(dist)); app.get(/^\/(?!api|files).*/, (req, res) => res.sendFile(join(dist, 'index.html'))); }
 
 J.recoverOrphans();
-app.listen(PORT, '127.0.0.1', () => console.log(`ReelMimic → http://localhost:${PORT}`));
+const server = app.listen(PORT, '127.0.0.1', () => console.log(`ReelMimic → http://localhost:${PORT}`));
+server.on('error', (e: NodeJS.ErrnoException) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. ReelMimic may already be running at http://localhost:${PORT}; set PORT to use another.`);
+    process.exit(1);
+  }
+  throw e;
+});
