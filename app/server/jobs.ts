@@ -68,6 +68,8 @@ export function setRounds(id: string, input: Record<string, unknown>) {
 export type BusEvent = { type: 'job'; job: Job } | { type: 'log'; ev: LogEvent };
 export const bus = new EventEmitter<{ job: [id: string, ev: BusEvent] }>(); bus.setMaxListeners(100);
 const running = new Map<string, Set<AbortController>>();
+// Cancel aborts the running turns and keeps new ones from starting until the user starts something again.
+const cancelled = new Set<string>();
 // Stop every agent this server started (on shutdown), so none keeps working unseen after a restart.
 export function stopAll() { for (const set of running.values()) for (const ac of set) ac.abort(); }
 
@@ -245,6 +247,7 @@ function analyze(id: string): Promise<boolean> {
 interface TurnOpts { session?: string; who?: string }
 interface TurnResult { ok: boolean; text?: string; missing?: string[]; stderr?: string; lastError?: string; aborted?: boolean }
 async function turn<P extends Phase>(id: string, phase: P, vars: StepVars[P], must: string[], { session = 'director', who }: TurnOpts = {}): Promise<TurnResult> {
+  if (cancelled.has(id)) return { ok: false, aborted: true };
   const j = load(id), d = dirOf(id);
   const ac = new AbortController(); if (!running.has(id)) running.set(id, new Set()); running.get(id)!.add(ac);
   const p = { dir: relative(ROOT, d).replace(/\\/g, '/'), brief: readText(join(d, 'brief.md')) || '', inputs: snapshot(id).inputs, config: CONFIG, lang: j.lang || 'zh-TW', ...vars };
@@ -252,6 +255,7 @@ async function turn<P extends Phase>(id: string, phase: P, vars: StepVars[P], mu
   const sid = session === 'fresh' ? undefined : session === 'director' ? j.sessionId : (j.sessions || {})[session];
   const label = who || (session === 'fresh' ? 'reviewer' : session);
   await slot(phase);
+  if (ac.signal.aborted) { release(); running.get(id)?.delete(ac); return { ok: false, aborted: true }; }   // cancelled while waiting for a slot
   log(id, { type: 'turn', state: 'start', phase, who: label });
   let r: AgentResult;
   try {
@@ -301,6 +305,7 @@ function collectNeeds(id: string, items: NeedRequest[] | undefined, from: string
 
 // ---------- pre-production ----------
 export async function start(id: string) {
+  uncancel(id);
   if (!(await analyze(id))) return;
   if (!(await step(id, 'styling', 'style', {}, ['analysis/STYLE.md', 'analysis/route.json'], 'styled'))) return;
   await preProduction(id);
@@ -340,6 +345,7 @@ export function busy(id: string) { return (running.get(id)?.size || 0) > 0 || ['
 export const PRE_PLAN: Stage[] = ['new', 'analyzing', 'styling', 'styled', 'planning', 'replanning'];   // notes allowed while busy here
 export type MessageMeta = Pick<ChatMessage, 'shot' | 'time' | 'attachments' | 'notes'>;
 export async function message(id: string, text: string, meta: MessageMeta = {}) {
+  uncancel(id);
   const j = load(id);
   let tagged = meta.shot ? `［鏡頭 ${meta.shot}］${text}` : meta.time != null ? `［${Number(meta.time).toFixed(1)} 秒］${text}` : text;
   chat(id, 'user', tagged, meta);
@@ -392,6 +398,7 @@ function snapshotEngine(id: string): EngineSnapshot | null {
 }
 
 export async function approve(id: string) {
+  uncancel(id);
   const open = openInputs(id);
   if (open.length) throw Object.assign(new Error('還有需要你提供或略過的素材：' + open.map((r) => r.label || r.id).join('、')), { code: 409 });
   await alignIfReady(id).catch(() => null);   // lyrics pasted before the music arrived: time them now, before anything is built
@@ -493,9 +500,11 @@ async function production(id: string, { fresh = false } = {}): Promise<boolean> 
   };
   const queue = [...chunks], results: boolean[] = [];
   await Promise.all(Array.from({ length: Math.max(1, Math.min(CONFIG.builders, chunks.length)) }, async () => {
-    while (queue.length) { const c = queue.shift()!; results.push(await runChunk(c)); }
+    while (queue.length && !cancelled.has(id)) { const c = queue.shift()!; results.push(await runChunk(c)); }
   }));
-  if (!(await castP)) return false;   // the cast gate paused for the user; built segments are kept
+  const castOk = await castP;
+  if (cancelled.has(id)) return fail(id, 'producing', { ok: false, aborted: true });   // not "parts didn't pass review"
+  if (!castOk) return false;   // the cast gate paused for the user; built segments are kept
   const j = load(id);
   if ((j.needs || []).length) return pause(id);
   const failed = Object.entries(j.pipeline.chunks || {}).filter(([, v]) => v.state !== 'passed');
@@ -608,6 +617,7 @@ async function finalPanel(id: string) {
 }
 
 export async function retry(id: string) {
+  uncancel(id);
   const j = load(id), f = j.failed;
   update(id, (x) => { x.retryPending = true; });
   if (f === 'analyzing') return start(id);
@@ -619,10 +629,11 @@ export async function retry(id: string) {
 }
 
 // Resume after the user provided what was asked (or waived it)
-export async function resume(id: string) { const j = load(id); update(id, (x) => { x.needs = []; }); if (existsSync(join(dirOf(id), 'out', 'video.mp4')) && j.pipeline?.phase === 'final') return finalPanel(id); if (await production(id)) await finalPanel(id); }
+export async function resume(id: string) { uncancel(id); const j = load(id); update(id, (x) => { x.needs = []; }); if (existsSync(join(dirOf(id), 'out', 'video.mp4')) && j.pipeline?.phase === 'final') return finalPanel(id); if (await production(id)) await finalPanel(id); }
 
 // The user looked at what the reviewers flagged and accepts it as is: mark the gate passed and keep going.
 export async function accept(id: string) {
+  uncancel(id);
   const j = load(id), ph = j.pipeline?.cast && !j.pipeline.cast.pass ? 'cast' : j.pipeline?.phase;
   update(id, (x) => { x.needs = []; x.error = null; x.failed = null;
     if (ph === 'cast') x.pipeline.cast = { round: 0, ...x.pipeline.cast, pass: true, state: 'passed', acceptedByUser: true };
@@ -632,5 +643,6 @@ export async function accept(id: string) {
   if (await production(id)) await finalPanel(id);
 }
 
-export function cancel(id: string) { for (const ac of running.get(id) || []) ac.abort(); }
-export async function critique(id: string) { return finalPanel(id); }
+export function cancel(id: string) { cancelled.add(id); for (const ac of running.get(id) || []) ac.abort(); }
+const uncancel = (id: string) => { cancelled.delete(id); };   // every action the user starts clears an earlier cancel
+export async function critique(id: string) { uncancel(id); return finalPanel(id); }
