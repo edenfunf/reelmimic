@@ -48,6 +48,21 @@ def transcribe(wav, model_name, lang):
     return chars
 
 
+# Plain text (one line each) or LRC: "[00:12.34]line", "<00:12.34>" word times (enhanced LRC), "[ti:..]" / "[Chorus]" tags
+# (dropped). A line with several timestamps is sung that many times (a repeated chorus): it's listed once per time, in time order.
+LRC_TIME = re.compile(r"^(\[\d+:\d+(?:[.:]\d+)?\])+"); LRC_WORD = re.compile(r"<\d+:\d+(?:[.:]\d+)?>")
+def lyric_lines(text):
+    out, repeated = [], False   # (time or None, line)
+    for l in text.splitlines():
+        l = l.strip(); m = LRC_TIME.match(l); t = LRC_WORD.sub("", l[m.end():] if m else l).strip()
+        if not t or t.startswith("["): continue
+        stamps = re.findall(r"\[(\d+):(\d+)(?:[.:](\d+))?\]", m.group(0)) if m else []
+        repeated |= len(stamps) > 1
+        out += [(int(mm) * 60 + int(ss) + float("0." + (ff or "0")), t) for mm, ss, ff in stamps] or [(None, t)]
+    if repeated and all(s is not None for s, _ in out): out.sort(key=lambda x: x[0])
+    return [t for _, t in out]
+
+
 def fmt(t):
     t = max(0.0, t); return f"[{int(t // 60):02d}:{t % 60:05.2f}]"
 
@@ -57,7 +72,7 @@ def main():
     ap.add_argument("--start", type=float, default=0.0); ap.add_argument("--end", type=float)
     ap.add_argument("--model", default="medium"); ap.add_argument("--lang", default="zh")
     a = ap.parse_args()
-    lines = [l.strip() for l in open(a.lyrics, encoding="utf-8").read().splitlines() if l.strip() and not l.strip().startswith("[")]
+    lines = lyric_lines(open(a.lyrics, encoding="utf-8").read())
     if not lines: sys.exit("no lyric lines in " + a.lyrics)
     tmp = os.path.join(tempfile.mkdtemp(), "clip.wav")
     cmd = ["ffmpeg", "-v", "error", "-y", "-ss", str(a.start)]
