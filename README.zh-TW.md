@@ -117,6 +117,8 @@ Claude Code 會自己讀到 repo 裡的 skills，Codex 會讀 `AGENTS.md`，不�
 | `CODEX_SANDBOX` | Codex 的沙盒模式（預設 `danger-full-access`，和 Claude Code 允許 Bash 時一樣；`workspace-write` 會讓 Chrome 渲染跑不起來） |
 | `BUILDERS`、`MAX_AGENTS` | 一支片同時幾個 AI 在做（預設 6）、所有專案加起來最多幾個（預設 12） |
 | `PORT` | 網站用的埠號（預設 4318） |
+| `DISCORD_WEBHOOK_URL`、`WEBHOOK_URL` | 企劃好了、需要你處理、影片完成（Discord 會附上影片）或出錯時傳訊息給你。`WEBHOOK_URL` 會收到 JSON：`{ event, id, title, stage, message, url }` |
+| `REELMIMIC_URL` | 訊息裡連結的網址開頭（預設 `http://localhost:4318`） |
 
 ## 文件
 

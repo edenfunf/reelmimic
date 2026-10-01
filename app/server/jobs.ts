@@ -279,6 +279,7 @@ async function turn<P extends Phase>(id: string, phase: P, vars: StepVars[P], mu
   if (r.text) chat(id, session === 'fresh' ? 'critic' : session === 'director' ? 'agent' : 'builder', r.text, { phase, who: label });
   return { ok: r.ok && !missing.length, text: r.text, missing, stderr: r.stderr, lastError: r.lastError };
 }
+export const CANCELLED = { zh: '已取消', en: 'Cancelled' };   // the error text of a cancelled turn (notify.ts stays quiet on it)
 function fail(id: string, stageName: Stage, res: TurnResult) {
   // an account limit is the real cause, even when it also left outputs missing: say so plainly
   const limit = [res.lastError, res.text, res.stderr].find((t) => t && /usage limit|rate limit|hit your limit|limit reached|quota|credit balance/i.test(t));
@@ -286,7 +287,7 @@ function fail(id: string, stageName: Stage, res: TurnResult) {
     setStage(id, 'error', { failed: stageName, error: L(id, `AI 帳號的用量到上限了，等額度恢復或換另一個 AI 導演再按「重試這一步」。原始訊息：${limit.slice(-300)}`, `Your AI account hit its usage limit. Wait until it resets (or switch to the other AI director), then click “Retry this step”. Message: ${limit.slice(-300)}`) });
     return false;
   }
-  setStage(id, 'error', { failed: stageName, error: res.aborted ? L(id, '已取消', 'Cancelled') : !res.missing?.length ? L(id, `agent 回合失敗 ${res.stderr ? '：' + res.stderr.slice(-300) : ''}`, `The agent turn failed${res.stderr ? ': ' + res.stderr.slice(-300) : ''}`) : L(id, `缺少輸出：${res.missing.join(', ')}`, `Missing output: ${res.missing.join(', ')}`) });
+  setStage(id, 'error', { failed: stageName, error: res.aborted ? L(id, CANCELLED.zh, CANCELLED.en) : !res.missing?.length ? L(id, `agent 回合失敗 ${res.stderr ? '：' + res.stderr.slice(-300) : ''}`, `The agent turn failed${res.stderr ? ': ' + res.stderr.slice(-300) : ''}`) : L(id, `缺少輸出：${res.missing.join(', ')}`, `Missing output: ${res.missing.join(', ')}`) });
   return false;
 }
 async function step<P extends Phase>(id: string, stageName: Stage, phase: P, vars: StepVars[P], must: string[], next?: Stage | null, opts?: TurnOpts) {

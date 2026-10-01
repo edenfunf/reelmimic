@@ -131,6 +131,8 @@ committed. See [`secrets.example.json`](secrets.example.json) for the format.
 | `CODEX_SANDBOX` | Codex sandbox mode (default `danger-full-access`, like Claude Code with Bash allowed; `workspace-write` blocks the Chrome renderer) |
 | `BUILDERS`, `MAX_AGENTS` | How many agents work on one video at once (default 6), and the limit across all projects (default 12) |
 | `PORT` | Web port (default 4318) |
+| `DISCORD_WEBHOOK_URL`, `WEBHOOK_URL` | Get a message when a plan is ready, when a video needs you, is done (video attached on Discord) or stops with an error. `WEBHOOK_URL` gets a JSON POST: `{ event, id, title, stage, message, url }` |
+| `REELMIMIC_URL` | Base of the links in those messages (default `http://localhost:4318`) |
 
 ## Docs
 

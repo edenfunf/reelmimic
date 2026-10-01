@@ -3,7 +3,7 @@
 Install and start it as described in the root [README](../README.md); how it works is in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 
 ```
-server/   index.ts (HTTP/SSE) · jobs.ts (workflow and production line) · prompts.ts (agent instructions) · agents/ (Claude Code / Codex adapters) · env.ts (keys)
+server/   index.ts (HTTP/SSE) · jobs.ts (workflow and production line) · prompts.ts (agent instructions) · agents/ (Claude Code / Codex adapters) · notify.ts (Discord / webhook messages) · env.ts (keys)
 web/      React UI: App.tsx (home) · Project.tsx (project page) · Chat.tsx (chat and live agent steps) · ui.tsx (components) · i18n.ts (languages) · styles.css
 shared/   types.ts (job.json, the project snapshot and live events: the contract between server and web)
 scripts/  doctor.mjs (environment check; plain JS so it can run on any Node and say what to upgrade)

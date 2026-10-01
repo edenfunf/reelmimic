@@ -15,6 +15,7 @@ ReelMimic 由三層組成：**網站**（React）、**伺服器**（Node，負�
    ├─ env.ts            啟動時載入 ~/.reelmimic/secrets.json
    ├─ jobs.ts           流程狀態機 + 生產線排程（誰先誰後、平行幾個、何時暫停）
    ├─ prompts.ts        每個步驟給 agent 的指令（改檔後下一輪就生效，不用重啟）
+   ├─ notify.ts         影片需要你處理或完成時，傳 Discord／webhook 訊息
    └─ agents/index.ts   agent 轉接層：Claude Code / Codex → 統一事件
    │  spawn（stdin 給指令，stdout 串流事件）
    ▼

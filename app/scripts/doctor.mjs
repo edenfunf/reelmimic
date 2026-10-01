@@ -66,6 +66,7 @@ try { secrets = JSON.parse(readFileSync(secretsPath, 'utf8')); } catch {}
 const has = (/** @type {string} */ k) => process.env[k] || secrets[k];
 has('YATING_KEY') ? ok('YATING_KEY (Taiwan TTS voices)') : opt('YATING_KEY not set', `natural Taiwan Mandarin narration; put it in ${secretsPath}`);
 has('PIXABAY_KEY') ? ok('PIXABAY_KEY') : opt('PIXABAY_KEY not set', 'more stock images/music; Openverse works without a key');
+has('DISCORD_WEBHOOK_URL') || has('WEBHOOK_URL') ? ok('Notifications (Discord / webhook)') : opt('No notifications set', 'DISCORD_WEBHOOK_URL or WEBHOOK_URL: get a message when a video needs you or is done');
 has('FREESOUND_KEY') ? ok('FREESOUND_KEY') : opt('FREESOUND_KEY not set', 'more sound effects');
 run('blender', ['--version']) || process.env.BLENDER ? ok('Blender (3D track)') : opt('Blender not found', 'only needed for the paused 3D product track');
 run('npx', ['--no-install', 'hyperframes', '--version']) ? ok('hyperframes CLI cached') : opt('hyperframes CLI not cached yet', 'downloaded automatically by npx on first use');
