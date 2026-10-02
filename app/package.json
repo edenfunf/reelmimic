@@ -12,6 +12,7 @@
     "test": "node --test --experimental-test-module-mocks \"server/**/*.test.ts\"",
     "check": "npm run typecheck && npm run lint && npm test",
     "doctor": "node scripts/doctor.mjs",
+    "publish": "node scripts/publish.mjs",
     "setup": "npm install && node scripts/doctor.mjs"
   },
   "dependencies": {

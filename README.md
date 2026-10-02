@@ -131,6 +131,20 @@ committed. See [`secrets.example.json`](secrets.example.json) for the format.
 | `CODEX_SANDBOX` | Codex sandbox mode (default `danger-full-access`, like Claude Code with Bash allowed; `workspace-write` blocks the Chrome renderer) |
 | `BUILDERS`, `MAX_AGENTS` | How many agents work on one video at once (default 6), and the limit across all projects (default 12) |
 | `PORT` | Web port (default 4318) |
+| `UPLOAD_POST_KEY`, `UPLOAD_POST_USER` | Optional. Post a finished video to TikTok, Instagram, YouTube and others with `npm run publish` (see below) |
+
+### Posting the finished video (optional)
+
+ReelMimic never posts anything by itself. Once a project's final review is done and you're happy with the video, you can
+send it to your social accounts through [Upload-Post](https://upload-post.com) from the `app/` folder:
+
+```bash
+npm run publish -- <project id> --platforms tiktok,instagram,youtube                 # dry run: shows what it would post
+npm run publish -- <project id> --platforms tiktok --at 2026-10-05T18:00 --tz Europe/Madrid --send
+```
+
+Without `--send` nothing leaves your computer. It only takes projects whose stage is `done`, uses the plan's title
+unless you pass `--title`, and a rerun of the same video won't post it twice.
 
 ## Docs
 
