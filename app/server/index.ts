@@ -1,7 +1,7 @@
 // ReelMimic server: REST + SSE over the job machine in jobs.ts, and static files (the built UI and project files).
 //   node server/index.ts             → http://localhost:4318
 import './env.ts';   // first: API keys / tool paths from ~/.reelmimic/secrets.json
-import express, { type Request, type Response } from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import { existsSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
 import { join, extname, resolve, sep } from 'node:path';
@@ -15,7 +15,8 @@ const PORT = +(process.env.PORT || 4318);
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 mkdirSync(J.PROJECTS, { recursive: true });
-const upload = multer({ dest: join(J.PROJECTS, '.uploads'), limits: { fileSize: 2 * 1024 ** 3 } });
+const MAX_UPLOAD_GB = +(process.env.MAX_UPLOAD_GB || 2);
+const upload = multer({ dest: join(J.PROJECTS, '.uploads'), limits: { fileSize: MAX_UPLOAD_GB * 1024 ** 3 } });
 
 const slug = () => new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 7);
 // multer hands over multipart filenames as latin1; browsers send UTF-8
@@ -125,6 +126,15 @@ app.get<'/files/:id/*', { id: string; 0: string }>('/files/:id/*', (req, res) =>
 // The built UI (npm run build → app/dist); in dev, Vite serves it and proxies /api and /files here.
 const dist = join(import.meta.dirname, '..', 'dist');
 if (existsSync(dist)) { app.use(express.static(dist)); app.get(/^\/(?!api|files).*/, (req, res) => res.sendFile(join(dist, 'index.html'))); }
+
+// A too-large upload should come back as JSON, not multer's default HTML page.
+app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+  if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+    res.status(413).json({ error: `file is larger than the ${MAX_UPLOAD_GB} GB upload limit` });
+    return;
+  }
+  next(err);
+});
 
 J.recoverOrphans();
 app.listen(PORT, '127.0.0.1', () => console.log(`ReelMimic → http://localhost:${PORT}`));
