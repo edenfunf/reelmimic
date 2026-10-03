@@ -29,6 +29,17 @@ KEEP = re.compile(r"[\w\u3400-\u9fff]", re.UNICODE)
 def norm_chars(s):
     return [c.lower() for c in _s2t(s) if KEEP.match(c)]
 
+LEAD_STAMPS = re.compile(r"^(?:\[\d+:\d+(?:[.:]\d+)?\])+")   # [mm:ss.xx] at the start of an LRC line
+WORD_STAMP = re.compile(r"<\d+:\d+(?:[.:]\d+)?>")            # <mm:ss.xx> word timestamps (enhanced LRC)
+
+def read_lyric_lines(text):
+    """The user's lyric lines from plain text or LRC. Timestamps are removed; tags like [ti:Song] and [Chorus] are dropped."""
+    lines = []
+    for raw in text.splitlines():
+        l = WORD_STAMP.sub("", LEAD_STAMPS.sub("", raw.strip())).strip()
+        if l and not l.startswith("["): lines.append(l)
+    return lines
+
 
 def transcribe(wav, model_name, lang):
     from faster_whisper import WhisperModel
@@ -57,7 +68,7 @@ def main():
     ap.add_argument("--start", type=float, default=0.0); ap.add_argument("--end", type=float)
     ap.add_argument("--model", default="medium"); ap.add_argument("--lang", default="zh")
     a = ap.parse_args()
-    lines = [l.strip() for l in open(a.lyrics, encoding="utf-8").read().splitlines() if l.strip() and not l.strip().startswith("[")]
+    lines = read_lyric_lines(open(a.lyrics, encoding="utf-8").read())
     if not lines: sys.exit("no lyric lines in " + a.lyrics)
     tmp = os.path.join(tempfile.mkdtemp(), "clip.wav")
     cmd = ["ffmpeg", "-v", "error", "-y", "-ss", str(a.start)]
