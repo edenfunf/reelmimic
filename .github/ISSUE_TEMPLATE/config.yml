@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Setup and settings
+    url: https://github.com/edenfunf/reelmimic/blob/main/README.md#settings
+    about: Installation and the settings table live in the README
+  - name: Contributing
+    url: https://github.com/edenfunf/reelmimic/blob/main/CONTRIBUTING.md
+    about: How to set up a dev environment and send a change

@@ -1,0 +1,24 @@
+name: Feature request
+description: An idea that would make ReelMimic better
+body:
+  - type: textarea
+    id: what-i-would-like
+    attributes:
+      label: What I'd like
+      description: The feature, in a sentence or two.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The problem it solves, or what it unlocks.
+    validations:
+      required: true
+  - type: textarea
+    id: how-it-could-work
+    attributes:
+      label: How it could work
+      description: Any sketch of an approach, if you have one.
+    validations:
+      required: false
