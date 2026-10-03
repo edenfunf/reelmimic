@@ -137,6 +137,7 @@ committed. See [`secrets.example.json`](secrets.example.json) for the format.
 - [Architecture](docs/ARCHITECTURE.md): how the whole thing runs, where files go, how the AI plugs in
 - [Extending](docs/EXTENDING.md): adding styles, rendering engines, or another AI
 - [Contributing](CONTRIBUTING.md)
+- [Troubleshooting](TROUBLESHOOTING.md): the setup problems the doctor detects, and their fixes
 
 ## Ground rules
 
