@@ -120,7 +120,9 @@ app.get<'/files/:id/*', { id: string; 0: string }>('/files/:id/*', (req, res) =>
   const { id } = req.params; if (!guard(res, id)) return;
   const base = resolve(J.dirOf(id)), p = resolve(base, req.params[0]);
   if (!p.startsWith(base + sep) || !existsSync(p)) return res.status(404).end();
-  res.set('Cache-Control', 'no-cache'); res.sendFile(p);
+  const rel = req.params[0];
+  res.set('Cache-Control', rel === 'out/video.mp4' ? 'private, max-age=60, must-revalidate' : 'no-cache');
+  res.sendFile(p);
 });
 
 // The built UI (npm run build → app/dist); in dev, Vite serves it and proxies /api and /files here.
