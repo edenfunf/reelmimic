@@ -27,6 +27,13 @@ describe('cleanRounds', () => {
     assert.throws(() => J.cleanRounds({ castRounds: 11 }), /1 to 10/);
     assert.throws(() => J.cleanRounds({ chunkRounds: 2.5 }), /whole number/);
   });
+  test('the edges of the range pass', () => {
+    assert.deepEqual(J.cleanRounds({ castRounds: 1, finalRounds: 10 }), { castRounds: 1, finalRounds: 10 });
+    assert.deepEqual(J.cleanRounds({ chunkRounds: '10' }), { chunkRounds: 10 });
+  });
+  test('non-numeric input is rejected like the rest', () => {
+    assert.throws(() => J.cleanRounds({ castRounds: 'abc' }), /whole number/);
+  });
 });
 
 describe('projectTitle', () => {
