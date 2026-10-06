@@ -36,3 +36,7 @@ How it works is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and how to exte
 - Don't commit `projects/`, API keys (`~/.reelmimic/secrets.json`), reference videos, or any asset you don't have the
   rights to.
 - Comments and docs can be in English or Traditional Chinese. Match what's around them.
+
+## Community
+
+This project follows the [Code of Conduct](CODE_OF_CONDUCT.md).
