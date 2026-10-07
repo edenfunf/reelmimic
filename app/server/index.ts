@@ -25,6 +25,8 @@ const safeName = (n: string) => n.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 120);
 const isUrl = (s: string | undefined) => /^https?:\/\/\S+$/i.test((s || '').trim());
 const guard = (res: Response, id: string) => { if (!/^[\w-]+$/.test(id) || !existsSync(join(J.dirOf(id), 'job.json'))) { res.status(404).json({ error: 'no such project' }); return false; } return true; };
 
+// Answers as soon as the server is listening: start.bat / start.sh poll it before opening the browser
+app.get('/api/health', (req, res) => res.json({ ok: true }));
 let AGENTS: AgentStatus | null = null;
 app.get('/api/agents', (req, res) => { AGENTS = AGENTS || agentStatus(); res.json(AGENTS); });
 app.get('/api/projects', (req, res) => res.json(J.listJobs()));

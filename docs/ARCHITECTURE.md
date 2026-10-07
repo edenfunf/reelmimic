@@ -136,6 +136,7 @@ builder (kept across fix rounds); reviewers always start fresh.
 
 | Method | Path | Purpose |
 |---|---|---|
+| GET | `/api/health` | `{ ok: true }` once the server is listening (`start.bat` / `start.sh` wait for it before opening the browser) |
 | GET | `/api/agents` | detect installed agent CLIs |
 | GET/POST | `/api/projects` | list / create (multipart: reference or url, brief, agent, lang, inputs) |
 | GET | `/api/projects/:id` | project snapshot (everything the web app needs) |

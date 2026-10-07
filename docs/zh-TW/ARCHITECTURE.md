@@ -119,6 +119,7 @@ projects/<id>/
 
 | 方法 | 路徑 | 用途 |
 |---|---|---|
+| GET | `/api/health` | 伺服器開始接受連線後回 `{ ok: true }`（`start.bat`／`start.sh` 等到它回應才開瀏覽器） |
 | GET | `/api/agents` | 偵測已安裝的 agent CLI |
 | GET/POST | `/api/projects` | 列表／建立（multipart：reference 或 url、brief、agent、lang、inputs） |
 | GET | `/api/projects/:id` | 專案快照（網站需要的所有資料） |
