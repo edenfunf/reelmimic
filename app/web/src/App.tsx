@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentKind, AgentStatus, ProjectSummary, Rounds } from '../../shared/types.ts';
 import { api } from './api.ts';
-import { I, BrandMark, Orb, Seg, AutoText, ago, RoundsEditor } from './ui.tsx';
+import { I, BrandMark, Orb, Seg, AutoText, ago, RoundsEditor, ErrorBoundary } from './ui.tsx';
 import type { IconName, RoundValues } from './ui.tsx';
 import { Project, Status } from './Project.tsx';
 import { LANGS, lang as initialLang, setLang } from './i18n.ts';
@@ -37,7 +37,9 @@ export default function App() {
         <LangMenu />
         <button className="icon-btn" onClick={toggle} aria-label="切換外觀"><I n={theme === 'dark' ? 'sun' : 'moon'} /></button>
       </header>
-      {r.page === 'home' ? <Home agents={agents} /> : <Project key={r.id} id={r.id} />}
+      <ErrorBoundary key={r.id || 'home'} page back={r.page === 'project'} log={r.id && api.file(r.id, 'logs/events.jsonl')}>
+        {r.page === 'home' ? <Home agents={agents} /> : <Project key={r.id} id={r.id} />}
+      </ErrorBoundary>
     </>
   );
 }
