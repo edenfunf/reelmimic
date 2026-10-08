@@ -153,6 +153,7 @@ unless you pass `--title`, and a rerun of the same video won't post it twice.
 - [Architecture](docs/ARCHITECTURE.md): how the whole thing runs, where files go, how the AI plugs in
 - [Extending](docs/EXTENDING.md): adding styles, rendering engines, or another AI
 - [Contributing](CONTRIBUTING.md)
+- [Troubleshooting](TROUBLESHOOTING.md): the setup problems the doctor detects, and their fixes
 
 ## Ground rules
 
