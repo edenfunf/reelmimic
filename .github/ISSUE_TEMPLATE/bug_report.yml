@@ -1,0 +1,62 @@
+name: Bug report
+description: Something broke or behaves unexpectedly
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please run `cd app && npm run doctor` first -
+        it answers most setup questions, and its output helps a lot below.
+  - type: textarea
+    id: what-happens
+    attributes:
+      label: What happens
+      description: The actual behaviour, in a sentence or two.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What you expected instead, and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: how-to-reproduce
+    attributes:
+      label: How to reproduce
+      description: The exact steps, in order.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: suggested-fix
+    attributes:
+      label: Suggested fix
+      description: If you have an idea where the fix belongs, say it here.
+    validations:
+      required: false
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: OS and version (e.g. Windows 11, macOS 15, Ubuntu 24.04)
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: What you are running (`git rev-parse --short HEAD`)
+    validations:
+      required: false
+  - type: textarea
+    id: doctor-output
+    attributes:
+      label: Doctor output
+      description: Output of `cd app && npm run doctor`
+      render: text
+    validations:
+      required: false
