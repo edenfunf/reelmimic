@@ -23,6 +23,8 @@ type Upload = Express.Multer.File;
 const fileName = (f: Upload) => safeName(Buffer.from(f.originalname, 'latin1').toString('utf8'));
 const safeName = (n: string) => n.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 120);
 const isUrl = (s: string | undefined) => /^https?:\/\/\S+$/i.test((s || '').trim());
+// Uploaded references only need to be plausible videos; URL references are left to yt-dlp.
+const REFERENCE_EXTS = new Set(['.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v', '.mpg', '.mpeg']);
 const guard = (res: Response, id: string) => { if (!/^[\w-]+$/.test(id) || !existsSync(join(J.dirOf(id), 'job.json'))) { res.status(404).json({ error: 'no such project' }); return false; } return true; };
 
 let AGENTS: AgentStatus | null = null;
@@ -34,6 +36,10 @@ app.post('/api/projects', upload.fields([{ name: 'reference', maxCount: 1 }, { n
   const { url, brief = '', agent = 'claude', title } = req.body, lang = ['zh-TW', 'en', 'zh-CN'].includes(req.body.lang) ? req.body.lang : 'zh-TW';
   const files = req.files as Record<string, Upload[]> | undefined, ref = files?.reference?.[0];
   if (!ref && !isUrl(url)) return res.status(400).json({ error: '請上傳參考影片或貼上影片連結' });
+  if (ref && !REFERENCE_EXTS.has(extname(ref.originalname).toLowerCase())) {
+    for (const f of Object.values(files || {}).flat()) try { unlinkSync(f.path); } catch {}
+    return res.status(400).json({ error: '參考檔案看起來不是影片（支援 .mp4 .mov .mkv .webm .avi .m4v .mpg .mpeg）' });
+  }
   if (!['claude', 'codex'].includes(agent)) return res.status(400).json({ error: 'agent 必須是 claude 或 codex' });
   if (/�/.test(brief + (title || ''))) return res.status(400).json({ error: '需求文字編碼錯誤（請用 UTF-8 送出）' });
   // optional review/fix round limits for this project (castRounds, chunkRounds, finalRounds: whole numbers 1–10)
