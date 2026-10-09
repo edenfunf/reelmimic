@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { InputKind, Job, Pipeline as PipelineState, RequiredInput, RoundKey, Rounds, Stage } from '../../shared/types.ts';
 import { api } from './api.ts';
-import { I, Orb, Md, Ring, AutoText, useNow, clock, fmt, RoundsEditor } from './ui.tsx';
+import { I, Orb, Md, Ring, AutoText, useNow, clock, fmt, RoundsEditor, ErrorBoundary } from './ui.tsx';
 import type { IconName, RoundValues } from './ui.tsx';
 import { Conversation, buildThread, STAGE_DO } from './Chat.tsx';
 import type { Critique as CritiqueData, MustFix, PlanAsset, Shot as ShotData, SnapshotView, Tag } from './types.ts';
@@ -69,7 +69,7 @@ export function Project({ id }: { id: string }) {
         })}
       </div>
       <div className="proj">
-        <div>
+        <ErrorBoundary><div>
           {working && <LiveBanner id={id} job={job} />}
           {job.stage === 'error' && <ErrorCard id={id} job={job} />}
           {(job.stage === 'needs_input' || ((job.needs || []).length > 0 && !working)) && <Needs id={id} s={s} file={file} onZoom={onZoom} />}
@@ -83,8 +83,8 @@ export function Project({ id }: { id: string }) {
             {cur === 'ref' && <Analysis s={s} file={file} onZoom={onZoom} />}
             {!tabs.length && !working && <div className="card empty"><Orb size={44} idle /><div><b>還沒有內容</b><div className="small muted">拆解開始後，結果會出現在這裡。</div></div></div>}
           </div>
-        </div>
-        <Conversation id={id} s={s} tag={tag} setTag={setTag} onZoom={onZoom} />
+        </div></ErrorBoundary>
+        <ErrorBoundary log={api.file(id, 'logs/events.jsonl')}><Conversation id={id} s={s} tag={tag} setTag={setTag} onZoom={onZoom} /></ErrorBoundary>
       </div>
       {zoom && <div className="lightbox" onClick={() => setZoom(null)}><img src={zoom} /></div>}
     </main>
