@@ -70,6 +70,24 @@ to build `build/production.json`):
 Then write a style file pointing to it (previous section). Before adding a third-party skill, read its scripts and add
 its license to `THIRD_PARTY_NOTICES.md`.
 
+### Optional hosted generation with Muapi
+
+ReelMimic can stay local-first while using Muapi for an occasional generated image or video asset. This is an
+opt-in helper; it does not replace a drawing engine or change the normal production line. Add `MUAPI_API_KEY` to
+`~/.reelmimic/secrets.json` (or export it in the environment), then prepare a JSON request matching the current
+schema for the model you choose. Find available models and their endpoint schemas at [muapi.ai/docs](https://muapi.ai/docs).
+
+```bash
+python .claude/skills/video-clone/scripts/muapi_generate.py \
+  --endpoint <model-endpoint> --request request.json --out projects/<id>/assets/generated.png
+```
+
+The helper submits the request, polls until completion, and downloads the first output. Image and video models have
+different inputs and outputs, so use the selected model's schema and choose an output extension that matches it.
+Generation uses your Muapi account and may incur charges. Check the chosen model's terms for output rights; do not
+assume generated assets are licensed for reuse. Record the model, endpoint, request ID, and applicable terms in the
+project's `assets/ASSETS.md`. This helper needs Python 3.10+ and the standard library only.
+
 ### Starting from the engine kit
 
 `.claude/skills/video-clone/assets/engine-kit/` is the fastest way to build a new look. It has the shared runtime the
