@@ -9,7 +9,7 @@
 //       → done   (needs_user items never trigger a revise: they pause the job and ask the user)
 // Quality is checked where defects are born (each character, each chunk), not only at the end.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, statfsSync, cpSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { extname, join, relative, resolve } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { runAgent, type AgentResult } from './agents/index.ts';
@@ -70,6 +70,9 @@ export function setRounds(id: string, input: Record<string, unknown>) {
   update(id, (x) => { const s = { ...(x.settings || {}) }; for (const [k, v] of Object.entries(clean) as [RoundKey, number | null][]) { if (v == null) delete s[k]; else s[k] = v; } x.settings = s; });
   return snapshot(id);
 }
+// Uploaded references only need to look like a video (by extension); URL references are left to yt-dlp.
+export const REFERENCE_EXTS = ['.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v', '.mpg', '.mpeg'];
+export const isVideoName = (name: string) => REFERENCE_EXTS.includes(extname(name).toLowerCase());
 
 export type BusEvent = { type: 'job'; job: Job } | { type: 'log'; ev: LogEvent };
 export const bus = new EventEmitter<{ job: [id: string, ev: BusEvent] }>(); bus.setMaxListeners(100);

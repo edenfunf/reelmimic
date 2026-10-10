@@ -29,6 +29,15 @@ describe('cleanRounds', () => {
   });
 });
 
+describe('isVideoName', () => {
+  test('accepts the video extensions in any letter case', () => {
+    for (const name of ['clip.mp4', 'CLIP.MOV', 'a.b.MkV', '參考影片.webm', 'x.avi', 'x.m4v', 'x.mpg', 'x.mpeg']) assert.ok(J.isVideoName(name), name);
+  });
+  test('rejects subtitles, documents, images and names with no extension', () => {
+    for (const name of ['subs.srt', 'brief.pdf', 'poster.png', 'song.mp3', 'clip.mp4.txt', 'reference', '.mp4']) assert.ok(!J.isVideoName(name), name);
+  });
+});
+
 describe('projectTitle', () => {
   test('uses the title when one is given', () => {
     assert.equal(J.projectTitle('My video', 'a brief', 'en'), 'My video');
