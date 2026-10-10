@@ -34,10 +34,9 @@ app.post('/api/projects', upload.fields([{ name: 'reference', maxCount: 1 }, { n
   const { url, brief = '', agent = 'claude', title } = req.body, lang = ['zh-TW', 'en', 'zh-CN'].includes(req.body.lang) ? req.body.lang : 'zh-TW';
   const files = req.files as Record<string, Upload[]> | undefined, ref = files?.reference?.[0];
   if (!ref && !isUrl(url)) return res.status(400).json({ error: '請上傳參考影片或貼上影片連結' });
-  if (ref && !['.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v', '.mpg', '.mpeg'].includes(extname(ref.originalname).toLowerCase())) {
-    try { unlinkSync(ref.path); } catch {}
+  if (ref && !J.isVideoName(ref.originalname)) {
     for (const f of Object.values(files || {}).flat()) try { unlinkSync(f.path); } catch {}
-    return res.status(400).json({ error: '這看起來不像影片檔，請上傳影片格式 (.mp4, .mov, .mkv 等)' });
+    return res.status(400).json({ error: `這看起來不像影片檔，請上傳影片格式（${J.REFERENCE_EXTS.join(' ')}）` });
   }
   if (!['claude', 'codex'].includes(agent)) return res.status(400).json({ error: 'agent 必須是 claude 或 codex' });
   if (/�/.test(brief + (title || ''))) return res.status(400).json({ error: '需求文字編碼錯誤（請用 UTF-8 送出）' });
