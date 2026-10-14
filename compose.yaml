@@ -1,0 +1,18 @@
+# docker compose up -d --build  →  http://localhost:4318      (see "Docker" in README.md)
+services:
+  reelmimic:
+    build: .
+    image: reelmimic
+    ports:
+      - "127.0.0.1:${PORT:-4318}:4318"   # this machine only: the app has no login
+    volumes:
+      - ./projects:/reelmimic/projects   # your videos, same folder as a normal install
+      - home:/home/node                  # Claude Code / Codex logins, ~/.reelmimic/secrets.json, model caches
+    env_file:
+      - path: .env                       # optional: API keys (see .env.example)
+        required: false
+    init: true                           # reaps the agents' child processes (renders, ffmpeg)
+    restart: unless-stopped
+
+volumes:
+  home:

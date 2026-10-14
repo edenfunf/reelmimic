@@ -1,0 +1,13 @@
+.git
+**/node_modules
+app/dist
+projects/*
+!projects/.gitkeep
+_vendor
+_smoke
+ref
+.env
+.env.*
+secrets.json
+**/__pycache__
+.playwright-mcp

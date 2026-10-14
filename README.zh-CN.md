@@ -97,6 +97,20 @@ git clone https://github.com/edenfunf/reelmimic.git && cd reelmimic
 打开 <http://localhost:4318> 就能用了。安装脚本会顺便检查环境，少了什么会跟你说；之后想再检查一次，跑 `cd app && npm run doctor`。
 Claude Code 会自己读到 repo 里的 skills，Codex 会读 `AGENTS.md`，不用另外设置。
 
+### Docker
+
+不想自己装 Node、Python、FFmpeg 和 Chrome 的话，可以用 Docker 一次装好：
+
+```bash
+git clone https://github.com/edenfunf/reelmimic.git && cd reelmimic
+docker compose up -d --build
+docker compose exec -it reelmimic claude                       # 第一次要登录（Codex：codex login --device-auth）
+```
+
+然后打开 <http://localhost:4318>。视频一样放在 `projects/`。登录信息、`~/.reelmimic/secrets.json` 和下载的模型存在
+`home` volume 里，重建也不会丢。不想在容器里登录的话，把 `CLAUDE_CODE_OAUTH_TOKEN`（用 `claude setup-token` 生成）、
+`ANTHROPIC_API_KEY` 或 `OPENAI_API_KEY` 写进 `.env`（参考 [`.env.example`](.env.example)）。端口只对这台电脑开放。
+
 ### 做第一支视频
 
 1. 在首页丢参考视频或贴链接，写你想做什么，选要用 Claude Code 还是 Codex。
@@ -117,6 +131,7 @@ Claude Code 会自己读到 repo 里的 skills，Codex 会读 `AGENTS.md`，不�
 | `CODEX_SANDBOX` | Codex 的沙盒模式（默认 `danger-full-access`，和 Claude Code 允许 Bash 时一样；`workspace-write` 会让 Chrome 渲染跑不起来） |
 | `BUILDERS`、`MAX_AGENTS` | 一支片同时几个 AI 在做（默认 6）、所有项目加起来最多几个（默认 12） |
 | `PORT` | 网站用的端口（默认 4318） |
+| `HOST` | 服务器监听的地址（默认 `127.0.0.1`，只有这台电脑能连；Docker 镜像在容器内用 `0.0.0.0`） |
 
 ## 文档
 

@@ -12,6 +12,8 @@ import * as J from './jobs.ts';
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { J.stopAll(); setTimeout(() => process.exit(0), 800); });
 
 const PORT = +(process.env.PORT || 4318);
+// this machine only by default (there is no login); the Docker image sets HOST=0.0.0.0 and publishes the port on 127.0.0.1
+const HOST = process.env.HOST || '127.0.0.1';
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 mkdirSync(J.PROJECTS, { recursive: true });
@@ -135,7 +137,7 @@ if (existsSync(dist)) { app.use(express.static(dist)); app.get(/^\/(?!api|files)
 
 // Recover only once the port is ours: a second copy (start.bat double-clicked again) used to mark the first copy's
 // running jobs as interrupted before it found the port taken. Now it just says so and exits.
-const server = app.listen(PORT, '127.0.0.1', () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`ReelMimic → http://localhost:${PORT}`);
   const cut = J.recoverOrphans();
   if (cut.length && process.env.AUTO_RESUME !== '0') { console.log(`Resuming ${cut.length} interrupted job(s): ${cut.join(', ')}`); J.autoResume(cut); }
