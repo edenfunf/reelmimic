@@ -110,6 +110,21 @@ Then open <http://localhost:4318>. The install script checks your setup and tell
 the check again any time with `cd app && npm run doctor`. Claude Code picks up the skills in this repo on its own, and
 Codex reads `AGENTS.md`, so there's nothing else to set up.
 
+### Docker
+
+If you'd rather not install Node, Python, FFmpeg and Chrome yourself, Docker runs all of it in one container:
+
+```bash
+git clone https://github.com/edenfunf/reelmimic.git && cd reelmimic
+docker compose up -d --build
+docker compose exec -it reelmimic claude                       # log in once (Codex: codex login --device-auth)
+```
+
+Then open <http://localhost:4318>. Videos go to `projects/` the same as a normal install. The logins,
+`~/.reelmimic/secrets.json` and downloaded models live in the `home` volume, so they survive rebuilds. To skip logging in
+inside the container, put `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`), `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
+in a `.env` file (see [`.env.example`](.env.example)). The port is only open to this computer.
+
 ### Your first video
 
 1. On the home page, drop in a reference video or paste a link, say what you want, and pick Claude Code or Codex.
@@ -131,6 +146,7 @@ committed. See [`secrets.example.json`](secrets.example.json) for the format.
 | `CODEX_SANDBOX` | Codex sandbox mode (default `danger-full-access`, like Claude Code with Bash allowed; `workspace-write` blocks the Chrome renderer) |
 | `BUILDERS`, `MAX_AGENTS` | How many agents work on one video at once (default 6), and the limit across all projects (default 12) |
 | `PORT` | Web port (default 4318) |
+| `HOST` | Address the server listens on (default `127.0.0.1`, this computer only; the Docker image uses `0.0.0.0` inside the container) |
 | `REELMIMIC_SECRETS` | Path to a different secrets file (legacy: `CLONE_STUDIO_SECRETS`) |
 | `UPLOAD_POST_KEY`, `UPLOAD_POST_USER` | Optional. Post a finished video to TikTok, Instagram, YouTube and others with `npm run post-video` (see below); `UPLOAD_POST_API` overrides the API address |
 
