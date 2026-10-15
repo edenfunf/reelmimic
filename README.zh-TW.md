@@ -117,11 +117,13 @@ Claude Code 會自己讀到 repo 裡的 skills，Codex 會讀 `AGENTS.md`，不�
 | `CODEX_SANDBOX` | Codex 的沙盒模式（預設 `danger-full-access`，和 Claude Code 允許 Bash 時一樣；`workspace-write` 會讓 Chrome 渲染跑不起來） |
 | `BUILDERS`、`MAX_AGENTS` | 一支片同時幾個 AI 在做（預設 6）、所有專案加起來最多幾個（預設 12） |
 | `PORT` | 網站用的埠號（預設 4318） |
+| `LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN` | 可不設。在 LINE 上看進度，需要你或做好時傳訊息給你（[設定方式](docs/zh-TW/LINE.md)） |
 
 ## 文件
 
 - [架構](docs/zh-TW/ARCHITECTURE.md)：整個流程怎麼跑、檔案怎麼放、怎麼接 AI
 - [擴充](docs/zh-TW/EXTENDING.md)：怎麼加風格、加製作引擎、接別的 AI
+- [LINE 機器人](docs/zh-TW/LINE.md)：在 LINE 上看進度、收通知
 - [參與開發](docs/zh-TW/CONTRIBUTING.md)
 
 ## 使用原則

@@ -1,13 +1,14 @@
 // ReelMimic server: REST + SSE over the job machine in jobs.ts, and static files (the built UI and project files).
 //   node server/index.ts             → http://localhost:4318
-import './env.ts';   // first: API keys / tool paths from ~/.reelmimic/secrets.json
+import { SECRETS_PATH } from './env.ts';   // first: API keys / tool paths from ~/.reelmimic/secrets.json
 import express, { type Request, type Response } from 'express';
 import multer from 'multer';
 import { existsSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
-import { join, extname, resolve, sep } from 'node:path';
+import { dirname, join, extname, resolve, sep } from 'node:path';
 import type { AgentStatus } from '../shared/types.ts';
 import { agentStatus } from './agents/index.ts';
 import * as J from './jobs.ts';
+import { startLine } from './line/index.ts';
 // Ctrl+C / kill: stop the agents first (the next start marks their turns interrupted, and Retry resumes them)
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { J.stopAll(); setTimeout(() => process.exit(0), 800); });
 
@@ -106,6 +107,15 @@ app.post('/api/projects/:id/settings', (req, res) => {
   try { res.json(J.setRounds(req.params.id, req.body || {})); } catch (e) { res.status(400).json({ error: (e as Error).message }); }
 });
 app.get('/api/config', (req, res) => res.json(J.CONFIG));
+// A new LINE link code (npm run line-code). This server only listens on localhost, so only you can ask for one.
+let LINE: ReturnType<typeof startLine> = null;
+// Web pages can't use it: the custom header forces a CORS preflight (refused), and the Host check stops DNS rebinding.
+app.post('/api/line/code', (req, res) => {
+  if (req.get('x-reelmimic') !== 'line-code' || !/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.get('host') || '')) return res.status(403).json({ error: 'forbidden' });
+  if (!LINE) return res.status(404).json({ error: 'The LINE bot is off: set LINE_CHANNEL_SECRET and LINE_CHANNEL_ACCESS_TOKEN (docs/LINE.md)' });
+  if (!LINE.running()) return res.status(503).json({ error: 'The LINE bot could not start (see the server terminal), so a code would be useless' });
+  res.json(LINE.newCode());
+});
 app.post('/api/projects/:id/retry', act(J.retry));
 app.post('/api/projects/:id/critique', act(J.critique));
 app.post('/api/projects/:id/cancel', (req, res) => { if (guard(res, req.params.id)) { J.cancel(req.params.id); res.json({ ok: true }); } });
@@ -139,6 +149,7 @@ const server = app.listen(PORT, '127.0.0.1', () => {
   console.log(`ReelMimic → http://localhost:${PORT}`);
   const cut = J.recoverOrphans();
   if (cut.length && process.env.AUTO_RESUME !== '0') { console.log(`Resuming ${cut.length} interrupted job(s): ${cut.join(', ')}`); J.autoResume(cut); }
+  LINE = startLine(dirname(SECRETS_PATH));   // LINE bot, when its keys are set (after recovery, so interrupted jobs aren't announced as errors)
 });
 server.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code !== 'EADDRINUSE') throw err;

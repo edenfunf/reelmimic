@@ -12,6 +12,7 @@
     "test": "node --test --experimental-test-module-mocks \"server/**/*.test.ts\"",
     "check": "npm run typecheck && npm run lint && npm test",
     "doctor": "node scripts/doctor.mjs",
+    "line-code": "node scripts/line-code.mjs",
     "post-video": "node scripts/post-video.mjs",
     "setup": "npm install && node scripts/doctor.mjs"
   },

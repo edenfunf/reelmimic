@@ -72,6 +72,11 @@ const has = (/** @type {string} */ k) => process.env[k] || secrets[k];
 has('YATING_KEY') ? ok('YATING_KEY (Taiwan TTS voices)') : opt('YATING_KEY not set', `natural Taiwan Mandarin narration; put it in ${secretsPath}`);
 has('PIXABAY_KEY') ? ok('PIXABAY_KEY') : opt('PIXABAY_KEY not set', 'more stock images/music; Openverse works without a key');
 has('FREESOUND_KEY') ? ok('FREESOUND_KEY') : opt('FREESOUND_KEY not set', 'more sound effects');
+// The bot needs both: a secret alone (or a token alone) would leave it off with only a line in the server log
+const lineKeys = ['LINE_CHANNEL_SECRET', 'LINE_CHANNEL_ACCESS_TOKEN'].filter((k) => has(k));
+lineKeys.length === 2 ? ok(`LINE bot (webhook port ${process.env.LINE_PORT || secrets.LINE_PORT || 4319})`)
+  : lineKeys.length ? opt(`LINE bot off: ${lineKeys[0]} is set but not the other key`, 'set both LINE_CHANNEL_SECRET and LINE_CHANNEL_ACCESS_TOKEN, see docs/LINE.md')
+  : opt('LINE bot not set up', 'check progress and get notified from LINE, see docs/LINE.md');
 run('blender', ['--version']) || process.env.BLENDER ? ok('Blender (3D track)') : opt('Blender not found', 'only needed for the paused 3D product track');
 run('npx', ['--no-install', 'hyperframes', '--version']) ? ok('hyperframes CLI cached') : opt('hyperframes CLI not cached yet', 'downloaded automatically by npx on first use');
 

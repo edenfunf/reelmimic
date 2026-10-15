@@ -26,7 +26,8 @@ ReelMimic 由三層組成：**網站**（React）、**伺服器**（Node，負�
    ├─ store.ts          job.json、事件紀錄、即時更新、輪數設定
    ├─ inputs.ts         需要使用者提供的素材、歌詞對時
    ├─ prompts.ts        每個步驟給 agent 的指令（改檔後下一輪就生效，不用重啟）
-   └─ agents/index.ts   agent 轉接層：Claude Code / Codex → 統一事件
+   ├─ agents/index.ts   agent 轉接層：Claude Code / Codex → 統一事件
+   └─ line/             可選的 LINE 機器人（用自己的埠）：查進度、通知（docs/zh-TW/LINE.md）
    │  spawn（stdin 給指令，stdout 串流事件）
    ▼
 agent 工作區（repo 根目錄）
@@ -141,6 +142,9 @@ projects/<id>/
 | POST | `/api/projects/:id/resume` · `/accept` · `/retry` · `/cancel` | 暫停後繼續 · 接受目前結果 · 重試失敗步驟 · 停止 |
 | GET | `/api/projects/:id/events` | SSE 事件流 |
 | GET | `/files/:id/*` | 專案內的檔案（影片、截圖） |
+| POST | `/api/line/code` | 一組新的 LINE 配對碼，終端機也會印（`npm run line-code`；LINE 機器人沒開時 404） |
+
+可選的 LINE 機器人用自己的埠（`LINE_PORT`，預設 4319），只提供有 LINE 簽章的 `POST /line/webhook`。要放到 HTTPS 通道後面的是這個埠，上面的 API 留在本機。見 [LINE.md](LINE.md)。
 
 ## 7. 工具（`.claude/skills/video-clone/scripts/`）
 
