@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { InputKind, Job, Pipeline as PipelineState, RequiredInput, RoundKey, Rounds, Stage } from '../../shared/types.ts';
 import { api } from './api.ts';
-import { I, Orb, Md, Ring, AutoText, useNow, clock, fmt, RoundsEditor } from './ui.tsx';
+import { I, Orb, Md, Ring, AutoText, useNow, useAction, errorText, clock, fmt, RoundsEditor } from './ui.tsx';
 import type { IconName, RoundValues } from './ui.tsx';
 import { Conversation, buildThread, STAGE_DO } from './Chat.tsx';
 import type { Critique as CritiqueData, MustFix, PlanAsset, Shot as ShotData, SnapshotView, Tag } from './types.ts';
@@ -97,12 +97,13 @@ function LiveBanner({ id, job }: { id: string; job: Job }) {
   const { live } = useMemo(() => buildThread(job), [job.log?.[job.log.length - 1]?.ts, job.stage]);
   const since = live.length ? Math.min(...live.map((b) => new Date(b.start).getTime())) : new Date(job.updatedAt!).getTime();
   const detail = job.stage === 'producing' || job.stage === 'critiquing' || job.stage === 'revising' ? PIPE_DO[job.pipeline?.phase ?? ''] : null;
+  const { busy, err, run } = useAction();
   return (
     <div className="livebar fade-in">
       <Orb size={36} live />
-      <div className="grow"><b className="shimmer">{STAGE_DO[job.stage]}…</b><div className="small muted">{detail || '過程即時顯示在右側對話'}{live.length > 1 ? ` · ${live.length} 個 agent 同時工作` : ''}</div></div>
+      <div className="grow"><b className="shimmer">{STAGE_DO[job.stage]}…</b>{err ? <div className="small" style={{ color: 'var(--red)' }}>{err}</div> : <div className="small muted">{detail || '過程即時顯示在右側對話'}{live.length > 1 ? ` · ${live.length} 個 agent 同時工作` : ''}</div>}</div>
       <span className="elapsed">{clock(now - since)}</span>
-      <button className="btn sm danger" onClick={() => api.cancel(id)}><I n="stop" />停止</button>
+      <button className="btn sm danger" disabled={!!busy} onClick={run('stop', () => api.cancel(id), { keep: true })}>{busy ? <><span className="spin-ring" />停止中</> : <><I n="stop" />停止</>}</button>
     </div>
   );
 }
@@ -243,8 +244,7 @@ const ACCEPT: Partial<Record<InputKind, string>> = { audio: 'audio/*,video/*,.mp
 function RequiredInputs({ id, s, editable, top }: { id: string; s: SnapshotView; editable: boolean; top?: boolean }) {
   const req = s.requiredInputs || [], missing = req.filter((r) => r.status === 'missing');
   const hasLyrics = req.some((r) => r.kind === 'lyrics') || s.lyrics;
-  const [err, setErr] = useState(''), [busy, setBusy] = useState('');
-  const act = (k: string, fn: () => Promise<unknown>) => async () => { setErr(''); setBusy(k); try { await fn(); } catch (e) { setErr((e as Error).message); } setBusy(''); };
+  const { busy, err, run: act } = useAction();
   return (
     <section id="required-inputs" className={`card req ${top && missing.length ? 'req-top' : ''}`}>
       <div className="card-h"><div>
@@ -279,7 +279,7 @@ export function Upload({ id, label = '上傳檔案', forInput, accept, multiple 
     if (!files.length) return; setBusy(true); setMsg({});
     const f = new FormData(); [...files].forEach((x) => f.append('inputs', x));
     try { const r = await api.addInputs(id, f, null, forInput); setMsg({ names: (r.saved || []).map((p) => p.split('/').pop()).join('、') }); }
-    catch (e) { setMsg({ err: (e as Error).message }); } finally { setBusy(false); if (ref.current) ref.current.value = ''; }
+    catch (e) { setMsg({ err: errorText(e) }); } finally { setBusy(false); if (ref.current) ref.current.value = ''; }
   };
   return (
     <span className="upload">
@@ -294,7 +294,7 @@ function Lyrics({ id, s, editable }: { id: string; s: SnapshotView; editable: bo
   const [text, setText] = useState(''), [busy, setBusy] = useState(false), [msg, setMsg] = useState('');
   const L = s.lyrics?.lines || [];
   const mean = L.length ? L.reduce((a, l) => a + (l.match || 0), 0) / L.length : 0;
-  const go = async () => { setBusy(true); setMsg(''); try { const r = await api.lyrics(id, text); setMsg(r.aligned ? '對時完成' : r.ok ? '歌詞已存，收到配樂後會自動對時' : '對時失敗，請看右側紀錄'); if (r.ok) setText(''); } catch (e) { setMsg((e as Error).message); } setBusy(false); };
+  const go = async () => { setBusy(true); setMsg(''); try { const r = await api.lyrics(id, text); setMsg(r.aligned ? '對時完成' : r.ok ? '歌詞已存，收到配樂後會自動對時' : '對時失敗，請看右側紀錄'); if (r.ok) setText(''); } catch (e) { setMsg(errorText(e)); } setBusy(false); };
   return (
     <div style={{ marginTop: 18 }}>
       <div className="row" style={{ marginBottom: 8 }}><div className="sub-h" style={{ margin: 0 }}>歌詞字幕</div><span className="sp grow" />{L.length > 0 && <span className="cap ok"><I n="check" s={2.4} />{L.length} 句 · 平均匹配 {Math.round(mean * 100)}%</span>}</div>
@@ -307,14 +307,13 @@ function Lyrics({ id, s, editable }: { id: string; s: SnapshotView; editable: bo
   );
 }
 function Approve({ id, open }: { id: string; open: RequiredInput[] }) {
-  const [err, setErr] = useState(''), [busy, setBusy] = useState(false);
-  const go = async () => { setErr(''); setBusy(true); try { await api.approve(id); } catch (e) { setErr((e as Error).message); } setBusy(false); };
+  const { busy, err, run } = useAction(), go = run('approve', () => api.approve(id), { keep: true });
   return (
     <div className="approve-bar">
       <div className="grow"><b>{open.length ? `還差 ${open.length} 項素材` : '企劃看起來 OK 嗎？'}</b>
-        <div className="small muted">{err || (open.length ? `請先提供或略過：${open.map((r) => r.label || r.id).join('、')}` : '有意見就在右邊說，AI 改完再給你看；核准後才開始生成。')}</div></div>
+        <div className={`small ${err ? '' : 'muted'}`} style={err ? { color: 'var(--red)' } : undefined}>{err || (open.length ? `請先提供或略過：${open.map((r) => r.label || r.id).join('、')}` : '有意見就在右邊說，AI 改完再給你看；核准後才開始生成。')}</div></div>
       {open.length > 0 && <button className="btn" onClick={() => document.getElementById('required-inputs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><I n="up" />去提供</button>}
-      <button className="btn primary lg" disabled={open.length > 0 || busy} onClick={go}>{busy ? <span className="spin-ring" /> : <I n="play" />}核准並開始生成</button>
+      <button className="btn primary lg" disabled={open.length > 0 || !!busy} onClick={go}>{busy ? <span className="spin-ring" /> : <I n="play" />}核准並開始生成</button>
     </div>
   );
 }
@@ -322,13 +321,13 @@ function Approve({ id, open }: { id: string; open: RequiredInput[] }) {
 // ---------- error: say what happened in plain words, offer the next move ----------
 const STEP_NAME: Record<string, string> = { analyzing: '拆解參考片', styling: '判斷風格', planning: '寫企劃', replanning: '修改企劃', producing: '生產', revising: '修改成片', critiquing: '評審' };
 function ErrorCard({ id, job }: { id: string; job: Job }) {
-  const [busy, setBusy] = useState(false), [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false), { busy, err, run } = useAction();
   // the server writes errors in the project's language: match both
   const e = job.error || '', cancelled = /取消|^Cancelled/.test(e), restarted = /重新啟動|server restarted/i.test(e), limited = /用量到上限|usage limit/i.test(e);
   const missing = e.match(/(?:缺少輸出：|Missing output: )(.+)/)?.[1];
   const title = cancelled ? `你停止了「${STEP_NAME[job.failed ?? ''] || job.failed}」` : restarted ? `「${STEP_NAME[job.failed ?? ''] || job.failed}」被伺服器重啟打斷` : limited ? 'AI 帳號的用量到上限了' : `「${STEP_NAME[job.failed ?? ''] || job.failed}」沒有完成`;
   const why = cancelled ? '檔案保留在停下來的地方，可以從這裡繼續。' : restarted ? '做到一半的檔案都還在，繼續會從目前的檔案接著做。' : limited ? '等額度恢復，或換另一個 AI 導演，再從這裡繼續；做到一半的檔案都還在。' : missing ? `AI 這一輪結束了，但沒有產出應有的檔案（${missing}）。通常再跑一次就會好；也可以在右邊說明要怎麼處理。` : 'AI 這一輪出錯了。可以再跑一次，或在右邊說明要怎麼處理。';
-  const go = async () => { setBusy(true); try { await api.retry(id); } finally { setBusy(false); } };
+  const go = run('retry', () => api.retry(id), { keep: true });
   return (
     <div className={`banner ${cancelled || restarted ? 'warn' : 'bad'} fade-in`}>
       <div className="b-ico"><I n={cancelled ? 'pause' : 'alert'} s={2.2} /></div>
@@ -336,8 +335,9 @@ function ErrorCard({ id, job }: { id: string; job: Job }) {
         <h3>{title}</h3>
         <div className="small muted">{why}</div>
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="btn sm primary" disabled={busy} onClick={go}>{busy ? <span className="spin-ring" /> : <I n="play" />}{cancelled || restarted || limited ? '從這裡繼續' : '再試一次'}</button>
+          <button className="btn sm primary" disabled={!!busy} onClick={go}>{busy ? <span className="spin-ring" /> : <I n="play" />}{cancelled || restarted || limited ? '從這裡繼續' : '再試一次'}</button>
           {!cancelled && !restarted && e && <button className="btn sm plain" onClick={() => setOpen(!open)}>技術細節<I n="chev" className={`chev ${open ? 'open' : ''}`} /></button>}
+          {err && <span className="small" style={{ color: 'var(--red)' }}>{err}</span>}
         </div>
         {open && <pre>{e}</pre>}
       </div>
@@ -347,13 +347,13 @@ function ErrorCard({ id, job }: { id: string; job: Job }) {
 
 // ---------- paused: show exactly what to decide, with the evidence and one-click answers ----------
 function Needs({ id, s, file, onZoom }: { id: string; s: SnapshotView; file: FileUrl; onZoom: Zoom }) {
-  const job = s.job, needs = job.needs || [], p: PipelineState = job.pipeline || {}, [err, setErr] = useState(''), [busy, setBusy] = useState('');
+  const job = s.job, needs = job.needs || [], p: PipelineState = job.pipeline || {}, { busy, err, run } = useAction();
   const lyricsNeeded = needs.some((n) => n.kind === 'lyrics' || /歌詞|lyric|LRC/i.test(n.issue || ''));
   const castStuck = !needs.length && p.cast?.state === 'failed' && !p.cast?.pass;
   const failedChunks = Object.entries(p.chunks || {}).filter(([, v]) => ['failed', 'error'].includes(v.state));
   const shotsStuck = !needs.length && p.phase === 'shots' && failedChunks.length > 0;
   const rv = s.cast?.review;
-  const act = (k: string, fn: () => Promise<unknown>) => async () => { setErr(''); setBusy(k); try { await fn(); } catch (e) { setErr((e as Error).message); } setBusy(''); };
+  const act = (k: string, fn: () => Promise<unknown>) => run(k, fn, { keep: true });   // each of these moves the project on
   const fixAll = act('fix', () => api.message(id, castStuck ? '照審查意見全部修，修完重新過角色關' : '照審查意見把沒通過的鏡頭全部修好'));
   const Btn = ({ k, onClick, children, primary }: { k: string; onClick: () => void; children: ReactNode; primary?: boolean }) => <button className={`btn sm ${primary ? 'primary' : ''}`} disabled={!!busy} onClick={onClick}>{busy === k ? <span className="spin-ring" /> : null}{children}</button>;
   let title = '暫停中：需要你決定', body: ReactNode, actions: ReactNode;
@@ -398,7 +398,7 @@ function RoundsButton({ id, r }: { id: string; r: SnapshotView['rounds'] }) {
     const diff = Object.fromEntries((Object.keys(next) as RoundKey[]).filter((k) => next[k] !== local[k]).map((k) => [k, next[k] == null ? '' : next[k]]));
     setLocal({ ...local, ...Object.fromEntries(Object.entries(next).map(([k, v]) => [k, v ?? r.defaults[k as RoundKey]])) });
     setSaving(true); setErr('');
-    try { await api.settings(id, diff); } catch (e) { setErr((e as Error).message); setLocal(r.values); } finally { setSaving(false); }
+    try { await api.settings(id, diff); } catch (e) { setErr(errorText(e)); setLocal(r.values); } finally { setSaving(false); }
   };
   return (
     <div className="rd-wrap" ref={ref}>
@@ -474,7 +474,7 @@ function Result({ s, file, onZoom }: { s: SnapshotView; file: FileUrl; onZoom: Z
   const send = async () => {
     if (!notes.length || !canSend) return; setSending(true); setErr('');
     const body = `請依以下時間點修改（共 ${notes.length} 項）：\n` + notes.map((n, i) => `${i + 1}. [${tc(n.t)}] ${n.text}`).join('\n');
-    try { await api.message(id, body, { notes: notes.map(({ t, text }) => ({ t: +t.toFixed(2), text })) }); setNotes([]); } catch (e) { setErr((e as Error).message); }
+    try { await api.message(id, body, { notes: notes.map(({ t, text }) => ({ t: +t.toFixed(2), text })) }); setNotes([]); } catch (e) { setErr(errorText(e)); }
     setSending(false);
   };
   const must = (s.critique?.must_fix || []).filter((m): m is MustFix & { time: number } => !!m && typeof m.time === 'number');
@@ -517,8 +517,8 @@ function Result({ s, file, onZoom }: { s: SnapshotView; file: FileUrl; onZoom: Z
 }
 const VERDICT = { ours_better: ['贏過參考片', 'ok'], equal: ['和參考片同級', 'ok'], ref_better: ['輸給參考片', 'bad'] } as const;
 function Critique({ c, onSeek, id, stage, file, onZoom }: { c: CritiqueData; onSeek?: (t: number) => void; id: string; stage: Stage; file: FileUrl; onZoom: Zoom }) {
-  const sc = Object.entries(c.scores || {}), must = (c.must_fix || []).filter((m): m is MustFix => !!m), [busy, setBusy] = useState(false);
-  const fix = async () => { setBusy(true); try { await api.message(id, `照獨立評審列的 ${must.length} 項必修全部修改：\n` + must.map((m, i) => `${i + 1}. [${m.shot || '全片'}${m.time != null ? ' ' + m.time + 's' : ''}] ${m.issue}`).join('\n')); } finally { setBusy(false); } };
+  const sc = Object.entries(c.scores || {}), must = (c.must_fix || []).filter((m): m is MustFix => !!m), { busy, err, run } = useAction();
+  const fix = run('fix', () => api.message(id, `照獨立評審列的 ${must.length} 項必修全部修改：\n` + must.map((m, i) => `${i + 1}. [${m.shot || '全片'}${m.time != null ? ' ' + m.time + 's' : ''}] ${m.issue}`).join('\n')), { keep: true });
   return (
     <div className="critique">
       <div className="row"><div className="avatar-ai critic"><I n="mag" /></div><b>獨立評審</b><span className="grow" /><span className={`cap ${c.pass ? 'ok' : 'bad'}`}>{c.pass ? <><I n="check" s={2.4} />通過</> : `${must.length} 項必修`}</span></div>
@@ -530,7 +530,7 @@ function Critique({ c, onSeek, id, stage, file, onZoom }: { c: CritiqueData; onS
           {p.strip && <img className="shot-img" src={file(p.strip)} onClick={() => onZoom(file(p.strip!))} />}</div>; })}</div>}
       {sc.length > 0 && <div className="scores">{sc.map(([k, v]) => <div key={k} className={`score ${v < 4 ? 'low' : ''}`}><div className="row"><span>{k}</span><b>{v}</b></div><div className="pips">{[1, 2, 3, 4, 5].map((n) => <i key={n} className={n <= v ? 'on' : ''} />)}</div></div>)}</div>}
       {must.length > 0 && <ul className="issues" onClick={(e) => (e.target as Element).closest('li')?.classList.toggle('open')}>{must.map((m, i) => <li key={i} className={typeof m.time === 'number' ? 'seekable' : ''} onClick={() => typeof m.time === 'number' && onSeek?.(m.time)}><span className="tagc">{m.shot || '全片'}{typeof m.time === 'number' ? ` · ${m.time}s` : ''}</span><span>{m.issue}{m.fix && <span className="faint"> → {m.fix}</span>}</span></li>)}</ul>}
-      {!c.pass && must.length > 0 && ['done', 'error'].includes(stage) && <div className="row" style={{ marginTop: 12 }}><button className="btn sm primary" disabled={busy} onClick={fix}>{busy ? <span className="spin-ring" /> : <I n="wand" />}照評審的 {must.length} 項全部修</button><span className="small faint">或在上方影片時間軸自己標要改的地方</span></div>}
+      {!c.pass && must.length > 0 && ['done', 'error'].includes(stage) && <div className="row" style={{ marginTop: 12 }}><button className="btn sm primary" disabled={!!busy} onClick={fix}>{busy ? <span className="spin-ring" /> : <I n="wand" />}照評審的 {must.length} 項全部修</button>{err ? <span className="small" style={{ color: 'var(--red)' }}>{err}</span> : <span className="small faint">或在上方影片時間軸自己標要改的地方</span>}</div>}
     </div>
   );
 }
