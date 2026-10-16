@@ -84,6 +84,25 @@ export const Ring = ({ value = 0, size = 64, stroke = 6 }: { value?: number; siz
   );
 };
 
+// ---------- buttons that call the server ----------
+// fetch only rejects with a TypeError when the server can't be reached; say that instead of "Failed to fetch"
+export const errorText = (e: unknown) => (e instanceof TypeError ? '連不到伺服器，確認它還在執行，再試一次。' : (e as Error)?.message || String(e));
+const HOLD_MS = 15000;
+// busy while the call runs, the server's reason when it fails (409 "agent is working", a dropped connection…).
+// keep: a call that moves the project on (approve, retry, resume, stop) leaves its button busy after it succeeds, until
+// the page reloads into the next stage and the button goes away; a second click in between would only get a 409.
+// HOLD_MS is the fallback if that reload never comes (event stream down).
+export function useAction() {
+  const [busy, setBusy] = useState(''), [err, setErr] = useState(''), hold = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(hold.current), []);
+  const run = (key: string, fn: () => Promise<unknown>, { keep = false } = {}) => async () => {
+    clearTimeout(hold.current); setErr(''); setBusy(key);
+    try { await fn(); if (keep) { hold.current = setTimeout(() => setBusy(''), HOLD_MS); return; } } catch (e) { setErr(errorText(e)); }
+    setBusy('');
+  };
+  return { busy, err, run };
+}
+
 // ---------- time ----------
 export function useNow(active = true, ms = 1000) {
   const [n, setN] = useState(Date.now());
