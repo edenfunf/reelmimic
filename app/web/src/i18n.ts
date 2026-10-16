@@ -79,6 +79,8 @@ const EN: Record<string, string> = {
   '檔案保留在停下來的地方，可以從這裡繼續。': 'Files are kept where it stopped; you can continue from here.',
   '做到一半的檔案都還在，繼續會從目前的檔案接著做。': 'Work in progress is kept; continuing picks up from the current files.',
   'AI 這一輪出錯了。可以再跑一次，或在右邊說明要怎麼處理。': 'This AI turn failed. Run it again, or explain on the right how to handle it.',
+  '這裡的畫面顯示不出來': 'This part of the page could not be shown', '重新載入': 'Reload', '完整紀錄': 'Full log',
+  '伺服器上的工作和檔案都不受影響。可以重新載入；回報問題時請附上技術細節。': 'Work on the server and your files are not affected. Try reloading, and include the technical details if you report it.',
   // result
   '影片': 'Video', '下載 MP4': 'Download MP4', '看到哪裡想改，直接在這裡打（影片會自動停在這一格）': 'Type a change right here — the video pauses on this frame',
   '記下': 'Add note', '回到這個時間點': 'Back to this moment', '目前時間': 'Current time', '全部清除': 'Clear all', '跳到這裡': 'Jump here', '刪除': 'Delete',

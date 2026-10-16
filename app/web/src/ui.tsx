@@ -169,3 +169,33 @@ export function RoundsEditor({ value = {}, defaults, min = 1, max = 10, onChange
     </div>
   );
 }
+
+// ---------- error boundary ----------
+// A render error (an agent-written file in a shape the UI doesn't expect, say) unmounts everything up to the nearest
+// boundary; without one the whole page goes blank. This shows a card with a way out instead and logs the error.
+// page: stands in for a whole page (back: with the link to the project list) · log: link to the project's raw log
+type BoundaryProps = { children: ReactNode; page?: boolean; back?: boolean; log?: string };
+export class ErrorBoundary extends React.Component<BoundaryProps, { error: Error | null; where?: string }> {
+  override state: { error: Error | null; where?: string } = { error: null };
+  static getDerivedStateFromError(e: unknown) { return { error: e instanceof Error ? e : new Error(String(e)) }; }
+  override componentDidCatch(e: unknown, info: React.ErrorInfo) { console.error('ReelMimic UI error:', e, info.componentStack); this.setState({ where: info.componentStack || '' }); }
+  override render() {
+    const { error, where } = this.state, { page, back, log } = this.props;
+    if (!error) return this.props.children;
+    const card = (
+      <div className="banner bad fade-in" role="alert">
+        <div className="b-ico"><I n="alert" s={2.2} /></div>
+        <div className="grow">
+          <h3>這裡的畫面顯示不出來</h3>
+          <div className="small muted">伺服器上的工作和檔案都不受影響。可以重新載入；回報問題時請附上技術細節。</div>
+          <div className="row" style={{ marginTop: 12 }}>
+            <button className="btn sm primary" onClick={() => location.reload()}><I n="retry" />重新載入</button>
+            {log && <a className="btn sm plain" href={log} target="_blank" rel="noreferrer"><I n="doc" />完整紀錄</a>}
+          </div>
+          <details style={{ marginTop: 12 }}><summary className="small muted" style={{ cursor: 'pointer' }}>技術細節</summary><pre>{String(error)}{where}</pre></details>
+        </div>
+      </div>
+    );
+    return page ? <main className="page">{back && <a className="back" href="#/"><I n="back" s={2.2} />專案</a>}{card}</main> : card;
+  }
+}
