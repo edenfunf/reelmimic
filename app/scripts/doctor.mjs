@@ -24,7 +24,7 @@ const opt = (m, fix) => console.log(`  \x1b[33m○\x1b[0m ${m}${fix ? `  (${fix}
 let failed = 0;
 // .cmd shims (claude, codex, npx) need a shell on Windows; real executables must not go through one (it would split `-c "import x"`)
 /** @param {string} cmd @param {string[]} args */
-const run = (cmd, args, shell = IS_WIN && !/python|ffmpeg|blender/i.test(cmd)) => { try { return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell, timeout: 20000 }).trim(); } catch { return null; } };
+const run = (cmd, args, shell = IS_WIN && !/python|ffmpeg|ffprobe|blender/i.test(cmd)) => { try { return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell, timeout: 20000 }).trim(); } catch { return null; } };
 const PY = process.env.PYTHON || 'python';
 
 console.log('\nReelMimic — environment check\n');
@@ -36,6 +36,12 @@ pyv ? ok(pyv) : bad('Python 3.10+ not found', 'install Python 3.10 or newer, or 
 const ff = run('ffmpeg', ['-version']);
 const ffDir = process.env.FFMPEG_DIR && existsSync(join(process.env.FFMPEG_DIR, IS_WIN ? 'ffmpeg.exe' : 'ffmpeg'));
 ff || ffDir ? ok(`FFmpeg ${(ff || '').split('\n')[0].split(' ')[2] || `(FFMPEG_DIR)`}`) : bad('FFmpeg not found', 'install FFmpeg and put it on PATH, or set FFMPEG_DIR');
+
+// analyze.py, motion_check.py and align_lyrics.py read duration, size and frame rate with ffprobe
+const fp = run('ffprobe', ['-version']);
+const fpDir = process.env.FFMPEG_DIR && existsSync(join(process.env.FFMPEG_DIR, IS_WIN ? 'ffprobe.exe' : 'ffprobe'));
+fp || fpDir ? ok(`ffprobe ${(fp || '').split('\n')[0].split(' ')[2] || `(FFMPEG_DIR)`}`) : bad('ffprobe not found (reads video length, size and frame rate)', 'it ships with FFmpeg: put it on PATH, or set FFMPEG_DIR to the folder holding both');
+
 const chromes = [process.env.CHROME_PATH, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].filter(/** @returns {p is string} */ (p) => !!p);
 const chrome = chromes.find((p) => existsSync(p));
@@ -72,7 +78,9 @@ const has = (/** @type {string} */ k) => process.env[k] || secrets[k];
 has('YATING_KEY') ? ok('YATING_KEY (Taiwan TTS voices)') : opt('YATING_KEY not set', `natural Taiwan Mandarin narration; put it in ${secretsPath}`);
 has('PIXABAY_KEY') ? ok('PIXABAY_KEY') : opt('PIXABAY_KEY not set', 'more stock images/music; Openverse works without a key');
 has('FREESOUND_KEY') ? ok('FREESOUND_KEY') : opt('FREESOUND_KEY not set', 'more sound effects');
-run('blender', ['--version']) || process.env.BLENDER ? ok('Blender (3D track)') : opt('Blender not found', 'only needed for the paused 3D product track');
+const blenderEnv = process.env.BLENDER;
+run('blender', ['--version']) || (blenderEnv && existsSync(blenderEnv)) ? ok('Blender (3D track)')
+  : opt(blenderEnv ? `BLENDER points to a missing file: ${blenderEnv}` : 'Blender not found', 'only needed for the paused 3D product track');
 run('npx', ['--no-install', 'hyperframes', '--version']) ? ok('hyperframes CLI cached') : opt('hyperframes CLI not cached yet', 'downloaded automatically by npx on first use');
 
 console.log(failed ? `\n${failed} required item(s) missing.\n` : '\nAll required items present. Start with: npm start\n');
