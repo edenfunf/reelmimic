@@ -15,6 +15,10 @@ export type NotifyEvent = 'plan_ready' | 'needs_input' | 'done' | 'error';
 const EVENT: Partial<Record<Stage, NotifyEvent>> = { plan_review: 'plan_ready', needs_input: 'needs_input', done: 'done', error: 'error' };
 const DISCORD_FILE_LIMIT = 10 * 1024 ** 2;   // webhook uploads on a server without boosts
 const TELEGRAM_FILE_LIMIT = 50 * 1024 ** 2;  // Bot API uploads
+// A text message gets a minute. An upload gets that plus 10 s per MB, so a big video on a slow uplink (~1 Mbps) still makes it.
+// NOTIFY_TIMEOUT_MS: only for tests.
+const TIMEOUT_MS = +(process.env.NOTIFY_TIMEOUT_MS || 60000);
+export const uploadTimeout = (bytes: number) => Math.round(TIMEOUT_MS * (1 + bytes / 1024 ** 2 / 6));
 const telegramOn = () => !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID);
 // TELEGRAM_API: only for tests. The token is part of the URL, so post() never logs URLs.
 const telegram = (method: string) => `${(process.env.TELEGRAM_API || 'https://api.telegram.org').replace(/\/$/, '')}/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`;
@@ -34,9 +38,9 @@ export function messageOf(job: Job, event: NotifyEvent, title = titleOf(job)): s
   }
 }
 
-async function post(url: string, init: RequestInit, what: string) {
+async function post(url: string, init: RequestInit, what: string, timeout = TIMEOUT_MS) {
   try {
-    const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(60000), ...init });
+    const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(timeout), ...init });
     if (!r.ok) console.error(`notify: ${what} answered ${r.status} ${(await r.text()).slice(0, 200)}`);
     return r.ok;
   } catch (e) { console.error(`notify: ${what} failed: ${(e as Error).message}`); return false; }
@@ -49,13 +53,15 @@ export async function send(job: Job, event: NotifyEvent) {
   let bytes: Promise<Buffer> | undefined;
   const videoBlob = async () => new Blob([await (bytes ??= readFile(video))], { type: 'video/mp4' });   // read once for every channel
   if (process.env.DISCORD_WEBHOOK_URL) {
-    const content = `${text}\n${url}`.slice(0, 2000);
+    const hook = process.env.DISCORD_WEBHOOK_URL, content = `${text}\n${url}`.slice(0, 2000);
+    const sendText = () => post(hook, { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }, 'Discord');
     if (size <= DISCORD_FILE_LIMIT) {
       const form = new FormData();
       form.append('payload_json', JSON.stringify({ content }));
       form.append('files[0]', await videoBlob(), 'video.mp4');
-      work.push(post(process.env.DISCORD_WEBHOOK_URL, { body: form }, 'Discord'));
-    } else work.push(post(process.env.DISCORD_WEBHOOK_URL, { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }, 'Discord'));
+      // same as Telegram: a rejected or timed-out upload still tells you it's done
+      work.push(post(hook, { body: form }, 'Discord video', uploadTimeout(size)).then((ok) => ok || sendText()));
+    } else work.push(sendText());
   }
   if (telegramOn()) {   // plain text (no parse_mode), so titles and errors need no escaping
     const chat = process.env.TELEGRAM_CHAT_ID!, msg = `${text}\n${url}`;
@@ -65,7 +71,7 @@ export async function send(job: Job, event: NotifyEvent) {
       form.append('chat_id', chat); form.append('caption', msg.slice(0, 1024)); form.append('supports_streaming', 'true');
       form.append('video', await videoBlob(), 'video.mp4');
       // a failed upload (timeout, file rejected) still tells you it's done
-      work.push(post(telegram('sendVideo'), { body: form }, 'Telegram video').then((ok) => ok || sendText()));
+      work.push(post(telegram('sendVideo'), { body: form }, 'Telegram video', uploadTimeout(size)).then((ok) => ok || sendText()));
     } else work.push(sendText());
   }
   if (process.env.WEBHOOK_URL) work.push(post(process.env.WEBHOOK_URL, { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event, id: job.id, title, stage: job.stage, message: text, url }) }, 'webhook'));
