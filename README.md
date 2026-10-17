@@ -134,6 +134,8 @@ committed. See [`secrets.example.json`](secrets.example.json) for the format.
 | `DISCORD_WEBHOOK_URL`, `WEBHOOK_URL` | Get a message when a plan is ready, when a video needs you, is done (video attached on Discord) or stops with an error. `WEBHOOK_URL` gets a JSON POST: `{ event, id, title, stage, message, url }` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | The same messages from a Telegram bot (the video is sent when it's under 50 MB). Create a bot with [@BotFather](https://t.me/BotFather) for the token, send it any message, then `npm run doctor` shows your chat id |
 | `REELMIMIC_URL` | Base of the links in those messages (default `http://localhost:4318`) |
+| `NOTIFY_EVENTS` | Only these events, comma-separated: `plan_ready`, `needs_input`, `done`, `error` (default: all) |
+| `NOTIFY_QUIET_HOURS` | e.g. `23-8`: messages wait until then (errors still go out right away), using the server's clock |
 
 ## Docs
 

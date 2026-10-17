@@ -5,6 +5,9 @@
 //   WEBHOOK_URL          any URL; gets a JSON POST { event, id, title, stage, message, url } (Slack, n8n, Zapier, your own bot…)
 //   REELMIMIC_URL        base of the links in messages (default http://localhost:<PORT>)
 // Only stage changes notify, once each; stages already reached before the server started are never re-sent.
+// Optional, for when and what:
+//   NOTIFY_EVENTS        only these events, comma-separated: plan_ready, needs_input, done, error (default: all)
+//   NOTIFY_QUIET_HOURS   e.g. 23-8 or 22:30-7:00 (the server's clock): hold messages then, send them when it ends; errors still go out
 import { readFileSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -73,17 +76,58 @@ export async function send(job: Job, event: NotifyEvent) {
 }
 
 // Watches every job's stage from now on. Returns a stop function (tests), or null when nothing is configured.
-export function startNotifier() {
+const EVENTS: NotifyEvent[] = ['plan_ready', 'needs_input', 'done', 'error'];
+// NOTIFY_EVENTS → the events to send. Unknown names are reported and skipped; nothing usable means all of them.
+export function eventFilter(raw = ''): Set<NotifyEvent> {
+  const names = raw.split(/[\s,]+/).filter(Boolean), bad = names.filter((n) => !EVENTS.includes(n as NotifyEvent));
+  if (bad.length) console.error(`notify: NOTIFY_EVENTS has unknown event(s) ${bad.join(', ')} (known: ${EVENTS.join(', ')})`);
+  const good = names.filter((n): n is NotifyEvent => EVENTS.includes(n as NotifyEvent));
+  return new Set(good.length ? good : EVENTS);
+}
+
+// NOTIFY_QUIET_HOURS → [start, end) in minutes after midnight, or null (unset, unreadable, or an empty range)
+export function quietHours(raw = ''): [number, number] | null {
+  if (!raw.trim()) return null;
+  const m = /^(\d{1,2})(?::(\d{2}))?\s*-\s*(\d{1,2})(?::(\d{2}))?$/.exec(raw.trim());
+  const at = (h?: string, min?: string) => (+(h || 0) > 23 || +(min || 0) > 59 ? NaN : +(h || 0) * 60 + +(min || 0));
+  const range = m ? [at(m[1], m[2]), at(m[3], m[4])] as [number, number] : null;
+  if (!range || range.some(Number.isNaN)) { console.error(`notify: NOTIFY_QUIET_HOURS "${raw}" isn't a range like 23-8 or 22:30-7:00, so there are no quiet hours`); return null; }
+  return range[0] === range[1] ? null : range;
+}
+export function isQuiet(range: [number, number] | null, at: Date) {
+  if (!range) return false;
+  const [from, to] = range, m = at.getHours() * 60 + at.getMinutes();
+  return from < to ? m >= from && m < to : m >= from || m < to;   // 23-8 wraps past midnight
+}
+
+// clock / tickMs: only for tests.
+export function startNotifier({ clock = () => new Date(), tickMs = 60000 } = {}) {
   if (!process.env.DISCORD_WEBHOOK_URL && !process.env.WEBHOOK_URL && !telegramOn()) return null;
+  const wanted = eventFilter(process.env.NOTIFY_EVENTS), quiet = quietHours(process.env.NOTIFY_QUIET_HOURS);
   const last = new Map(J.listJobs().map((j) => [j.id, j.stage]));
+  const held = new Map<string, NotifyEvent>();   // project → what to tell when the quiet hours end (only the latest counts)
+  const deliver = (job: Job, event: NotifyEvent) => { send(job, event).catch((e) => console.error('notify:', e)); };
   const onJob = (id: string, ev: J.BusEvent) => {
     if (ev.type !== 'job') return;
     const { stage } = ev.job, prev = last.get(id), event = EVENT[stage];
     last.set(id, stage);
     // a cancel is the user's own doing: no message for it
     if (prev === stage || !event || (stage === 'error' && Object.values(J.CANCELLED).includes(ev.job.error || ''))) return;
-    send(ev.job, event).catch((e) => console.error('notify:', e));
+    if (!wanted.has(event)) return;
+    if (event !== 'error' && isQuiet(quiet, clock())) { held.set(id, event); return; }
+    held.delete(id);
+    deliver(ev.job, event);
   };
+  // After the quiet hours: what's still true gets sent (a plan you already approved from the web page doesn't)
+  const flush = () => {
+    if (!held.size || isQuiet(quiet, clock())) return;
+    for (const [id, event] of held) {
+      held.delete(id);
+      try { const job = J.load(id); if (EVENT[job.stage] === event) deliver(job, event); } catch (e) { console.error('notify:', e); }
+    }
+  };
+  const timer = quiet ? setInterval(flush, tickMs) : null;
+  timer?.unref();
   J.bus.on('job', onJob);
-  return () => { J.bus.off('job', onJob); };
+  return () => { J.bus.off('job', onJob); if (timer) clearInterval(timer); };
 }
