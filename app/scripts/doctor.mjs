@@ -65,9 +65,11 @@ try { secrets = JSON.parse(readFileSync(secretsPath, 'utf8')); } catch {}
 const has = (/** @type {string} */ k) => process.env[k] || secrets[k];
 has('YATING_KEY') ? ok('YATING_KEY (Taiwan TTS voices)') : opt('YATING_KEY not set', `natural Taiwan Mandarin narration; put it in ${secretsPath}`);
 has('PIXABAY_KEY') ? ok('PIXABAY_KEY') : opt('PIXABAY_KEY not set', 'more stock images/music; Openverse works without a key');
-const tg = has('TELEGRAM_BOT_TOKEN') && has('TELEGRAM_CHAT_ID');
-has('DISCORD_WEBHOOK_URL') || has('WEBHOOK_URL') || tg ? ok(`Notifications (${[has('DISCORD_WEBHOOK_URL') && 'Discord', tg && 'Telegram', has('WEBHOOK_URL') && 'webhook'].filter(Boolean).join(' / ')})`)
-  : opt('No notifications set', 'DISCORD_WEBHOOK_URL, TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID or WEBHOOK_URL: get a message when a video needs you or is done');
+// Notifications: ask each channel whether the keys work, so a dead webhook or token shows up here and not in the server log later
+const { checkNotify } = await import('../server/notify-check.ts');
+const channels = await checkNotify();
+for (const c of channels) c.ok ? ok(`Notifications: ${c.name} (${c.detail})`) : opt(`Notifications: ${c.name} not working`, c.detail);
+if (!channels.length) opt('No notifications set', 'DISCORD_WEBHOOK_URL, TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID or WEBHOOK_URL: get a message when a video needs you or is done');
 // Telegram: the bot token alone isn't enough, and the chat id is the hard part to find, so look it up from the bot's recent messages
 if (has('TELEGRAM_BOT_TOKEN') && !has('TELEGRAM_CHAT_ID')) {
   /** @typedef {{ chat: { id: number, title?: string, username?: string, first_name?: string } }} WithChat */
