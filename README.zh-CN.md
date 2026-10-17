@@ -120,6 +120,8 @@ Claude Code 会自己读到 repo 里的 skills，Codex 会读 `AGENTS.md`，不�
 | `DISCORD_WEBHOOK_URL`、`WEBHOOK_URL` | 企划好了、需要你处理、视频完成（Discord 会附上视频）或出错时发消息给你。`WEBHOOK_URL` 会收到 JSON：`{ event, id, title, stage, message, url }` |
 | `TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID` | 同样的通知改由 Telegram 机器人发（视频小于 50 MB 会直接发过去）。找 [@BotFather](https://t.me/BotFather) 建一个 bot 拿到 token，给它发任意一句话，再跑 `npm run doctor` 就会显示你的 chat id |
 | `REELMIMIC_URL` | 消息里链接的网址开头（默认 `http://localhost:4318`） |
+| `NOTIFY_EVENTS` | 只收这些事件，用逗号分开：`plan_ready`、`needs_input`、`done`、`error`（默认全部） |
+| `NOTIFY_QUIET_HOURS` | 例如 `23-8`：这段时间的消息先留着，时间到再发（出错照样马上发），以服务器的时间为准 |
 
 ## 文档
 
