@@ -64,7 +64,7 @@ def lyric_lines(text):
 
 
 def fmt(t):
-    t = max(0.0, t); return f"[{int(t // 60):02d}:{t % 60:05.2f}]"
+    cs = round(max(0.0, t) * 100); return f"[{cs // 6000:02d}:{cs % 6000 / 100:05.2f}]"   # round first: 59.996 → [01:00.00]
 
 
 def main():
@@ -95,17 +95,22 @@ def main():
         ratio = len(got) / max(1, len(idx))
         out.append({"text": l, "start": got[0][0] if got else None, "end": got[-1][1] if got else None, "match": round(ratio, 2),
                     "chars": [times[k] for k in idx]})
-    # interpolate lines that found nothing; keep order monotonic
-    known = [k for k, o in enumerate(out) if o["start"] is not None]
+    # lines that found nothing: each run of them shares the gap between its matched neighbours evenly, in order
+    k = 0
+    while k < len(out):
+        if out[k]["start"] is not None: k += 1; continue
+        j = k
+        while j < len(out) and out[j]["start"] is None: j += 1   # out[k:j] found nothing
+        s0 = out[k - 1]["end"] if k else 0.0
+        s1 = out[j]["start"] if j < len(out) else (rec[-1][2] if rec else s0)
+        step = (s1 - s0) / (j - k)
+        if step < 1.0: step = 2.0   # no real gap (or a tiny one): give each line time to be read
+        for n in range(j - k): out[k + n].update(start=s0 + n * step, end=s0 + (n + 1) * step, interpolated=True)
+        k = j
+    # keep order monotonic, and no line ending before it starts (in one pass, so each line sees the fixed previous one)
     for k, o in enumerate(out):
-        if o["start"] is None:
-            prev = max([j for j in known if j < k], default=None); nxt = min([j for j in known if j > k], default=None)
-            s0 = out[prev]["end"] if prev is not None else 0.0
-            s1 = out[nxt]["start"] if nxt is not None else (rec[-1][2] if rec else s0 + 3)
-            span = (s1 - s0) / (sum(1 for j in range(prev if prev is not None else -1, nxt if nxt is not None else len(out)) if out[j]["start"] is None) + 1) if s1 > s0 else 2.0
-            o["start"], o["end"], o["interpolated"] = s0 + 0.1, s0 + max(0.5, span), True
-    for k in range(1, len(out)):
-        if out[k]["start"] < out[k - 1]["start"]: out[k]["start"] = out[k - 1]["end"]
+        if k and o["start"] < out[k - 1]["start"]: o["start"] = out[k - 1]["end"]
+        o["end"] = max(o["end"], o["start"])
     with open(a.out, "w", encoding="utf-8") as f:
         for o in out: f.write(f"{fmt(o['start'])}{o['text']}\n")
     json.dump({"clip_start": a.start, "lines": out}, open(os.path.splitext(a.out)[0] + ".json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
