@@ -2,7 +2,7 @@
 // Runs against a throwaway projects folder (REELMIMIC_PROJECTS), never the real one. No agent is started.
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -14,6 +14,48 @@ after(() => rmSync(TMP, { recursive: true, force: true }));
 let n = 0;
 const newJob = (extra = {}) => J.createJob({ id: `t-${++n}`, title: 'test', agent: 'claude', brief: 'a brief', reference: { type: 'url', src: 'https://example.com/v' }, ...extra });
 const writePlan = (id: string, plan: object) => writeFileSync(join(J.dirOf(id), 'plan.json'), JSON.stringify(plan));
+
+describe('engine resolution', () => {
+  test('installed engines are the skill folders that carry a SKILL.md', () => {
+    const engines = J.installedEngines();
+    assert.ok(engines.includes('general-video'));
+    assert.ok(engines.includes('seam-craft'));
+    assert.deepEqual(engines, [...engines].sort());
+  });
+  test('resolveEngine trims, folds case, and refuses unknown names', () => {
+    assert.deepEqual(J.resolveEngine('seam-craft'), { engine: 'seam-craft', resolvedFrom: null, fallback: false });
+    assert.deepEqual(J.resolveEngine('  Seam-Craft '), { engine: 'seam-craft', resolvedFrom: 'Seam-Craft', fallback: false });
+    assert.equal(J.resolveEngine('seam-crafi'), null);
+    assert.equal(J.resolveEngine('   '), null);
+  });
+  test('a case-only mismatch freezes the folder spelling and rewrites route.json', () => {
+    const { id } = newJob();
+    mkdirSync(join(J.dirOf(id), 'analysis'), { recursive: true });
+    writeFileSync(join(J.dirOf(id), 'analysis', 'route.json'), JSON.stringify({ engine: 'Seam-Craft', why: ['measured pacing'] }));
+    const snap = J.snapshotEngine(id);
+    assert.equal(snap?.engine, 'seam-craft');
+    assert.equal(snap?.engineResolvedFrom, 'Seam-Craft');
+    assert.ok(!snap?.fallback);
+    const rewritten = JSON.parse(readFileSync(join(J.dirOf(id), 'analysis', 'route.json'), 'utf8'));
+    assert.equal(rewritten.engine, 'seam-craft');
+    assert.deepEqual(rewritten.why, ['measured pacing']);
+    assert.ok(existsSync(join(J.dirOf(id), 'build', 'engine', 'seam-craft', 'SNAPSHOT.json')));
+  });
+  test('an unknown engine falls back to the default and records what was asked for', () => {
+    const { id } = newJob();
+    mkdirSync(join(J.dirOf(id), 'analysis'), { recursive: true });
+    writeFileSync(join(J.dirOf(id), 'analysis', 'route.json'), JSON.stringify({ engine: 'painted-animaiton', why: [] }));
+    const snap = J.snapshotEngine(id);
+    assert.equal(snap?.engine, 'general-video');
+    assert.equal(snap?.fallback, true);
+    assert.equal(snap?.engineResolvedFrom, 'painted-animaiton');
+    assert.equal(JSON.parse(readFileSync(join(J.dirOf(id), 'analysis', 'route.json'), 'utf8')).engine, 'painted-animaiton');
+    assert.ok(existsSync(join(J.dirOf(id), 'build', 'engine', 'general-video', 'SNAPSHOT.json')));
+  });
+  test('no route.json still means no snapshot', () => {
+    assert.equal(J.snapshotEngine(newJob().id), null);
+  });
+});
 
 describe('cleanRounds', () => {
   test('keeps whole numbers in range and only the keys given', () => {
