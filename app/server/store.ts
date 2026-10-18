@@ -62,6 +62,9 @@ export function save(job: Job) {
 }
 export function update(id: string, fn: (j: Job) => void) { const j = load(id); fn(j); return save(j); }
 const LOG_KEEP = 600, TAIL_BYTES = 1 << 20;
+// Chat is rendered in full and travels in every snapshot, so it gets the same tail cap as the
+// log: a long project used to grow job.json - and every poll payload - without bound.
+const CHAT_KEEP = 600;
 const recent = new Map<string, LogEvent[]>();
 const eventsFile = (id: string) => join(dirOf(id), 'logs', 'events.jsonl');
 export function recentLog(id: string): LogEvent[] {
@@ -89,7 +92,7 @@ export function log(id: string, ev: LogEntry) {
 export function touch(id: string) { update(id, () => {}); }   // tell open pages to reload (e.g. after files were added)
 
 export const setStage = (id: string, stage: Stage, extra: Partial<Job> = {}) => update(id, (j) => Object.assign(j, { stage, ...extra }));
-export const chat = (id: string, role: ChatMessage['role'], text: string, extra: Partial<ChatMessage> = {}) => update(id, (j) => { j.chat.push({ role, text, ts: now(), ...extra }); });
+export const chat = (id: string, role: ChatMessage['role'], text: string, extra: Partial<ChatMessage> = {}) => update(id, (j) => { j.chat.push({ role, text, ts: now(), ...extra }); if (j.chat.length > CHAT_KEEP) j.chat.splice(0, j.chat.length - CHAT_KEEP); });
 export const pipe = (id: string, fn: (p: Pipeline) => void) => update(id, (j) => { j.pipeline = j.pipeline || {}; fn(j.pipeline); });
 export function pause(id: string) { setStage(id, 'needs_input'); return false; }
 

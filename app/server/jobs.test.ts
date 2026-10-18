@@ -176,3 +176,15 @@ describe('event log', () => {
     assert.equal((J.snapshot(id).job.log[0] as { text?: string }).text, 'old');
   });
 });
+
+describe('chat history', () => {
+  test('the tail is capped so job.json and snapshot payloads cannot grow without bound', () => {
+    const { id } = newJob();
+    for (let i = 0; i < 650; i++) S.chat(id, 'user', `m${i}`);
+    const chat = J.load(id).chat;
+    assert.equal(chat.length, 600, 'older messages are dropped, the tail is kept');
+    assert.equal(chat[0]?.text, 'm50');
+    assert.equal(chat.at(-1)?.text, 'm649');
+    assert.ok(J.snapshot(id).job.chat.length <= 600);
+  });
+});
