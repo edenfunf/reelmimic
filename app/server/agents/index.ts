@@ -11,7 +11,7 @@
 //   { type: 'error', text }                       stderr or a failure
 //
 // The prompt always goes through stdin, so nothing user-typed is ever put on a command line.
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
