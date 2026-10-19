@@ -28,10 +28,12 @@ interface Scenario {
   holdMs?: (step: string) => number;                       // this turn takes that long (ends early when cancelled)
   broken?: (step: string) => 'once' | 'always' | null;     // its JSON files come out unreadable; 'once': the format fix repairs them
   say?: (step: string) => string | null;                   // this turn succeeds and replies with that text
+  repairCast?: boolean;                                   // fake director reconciles metadata, never reruns setup
 }
 const pending = new Map<string, { files: [string, unknown][]; always: boolean }>();   // per project: the good files a format fix writes
 let S: Scenario;
 let calls: string[] = [];
+let agentSessions: (string | null | undefined)[] = [];
 const count: Record<string, number> = {};
 const bump = (k: string) => (count[k] = (count[k] || 0) + 1);
 
@@ -39,6 +41,7 @@ function outputs(prompt: string, dir: string): [string, Record<string, unknown>]
   const m = (re: RegExp) => prompt.match(re);
   const json = (o: unknown) => o;
   let r: RegExpMatchArray | null;
+  if (m(/## Step: reconcile cast metadata/)) return ['reconcile_cast', S.repairCast ? repairedCast(dir) : { 'build/production.json': JSON.parse(readFileSync(join(dir, 'build/production.json'), 'utf8')) }];
   if (m(/## 步驟：風格拆解/)) return ['style', { 'analysis/STYLE.md': '# 2D', 'analysis/route.json': { engine: 'no-such-engine' }, 'analysis/peaks.json': [{ id: 'P1', hit: 2 }] }];
   if (m(/## 步驟：前製企劃/)) return ['plan', { 'plan.json': { title: 'T', version: 1, characters: S.chars.map((id) => ({ id, name: id, file: `build/${id}.js` })) }, 'STORYBOARD.md': '# SB' }];
   if ((r = m(/## 步驟：做角色「[^」]+」[\s\S]*?只寫 (\S+?)：/))) return [`pre_cast`, { [r[1]]: '// character' }];
@@ -83,12 +86,14 @@ function outputs(prompt: string, dir: string): [string, Record<string, unknown>]
   throw new Error('fake agent: unknown step\n' + prompt.slice(0, 300));
 }
 
-async function fakeAgent({ cwd, prompt, onEvent, signal }: AgentRun) {
+async function fakeAgent({ cwd, prompt, onEvent, signal, sessionId }: AgentRun) {
+  agentSessions.push(sessionId);
   const dir = resolve(cwd, prompt.match(/專案資料夾：(\S+?)[（。]/)![1]);
   if (/## 修正檔案格式/.test(prompt)) {
     calls.push('fix_format');
     const p = pending.get(dir); pending.delete(dir);
     if (p && !p.always) for (const [f, v] of p.files) put(dir, f, v);
+    if (!p && S.repairCast) for (const [f, v] of Object.entries(repairedCast(dir))) put(dir, f, v);
     return { sessionId: 'sess-fix', text: 'fixed the format', ok: true, code: 0, stderr: '', lastError: '' };
   }
   const [name, files] = outputs(prompt, dir);
@@ -118,6 +123,26 @@ function put(dir: string, f: string, v: unknown) {
   writeFileSync(p, typeof v === 'string' ? v : JSON.stringify(v));
 }
 
+// Simulate only the metadata/sheet edits requested from the director; real scene files are never rewritten.
+function repairedCast(dir: string): Record<string, unknown> {
+  const plan = JSON.parse(readFileSync(join(dir, 'plan.json'), 'utf8'));
+  const prod = JSON.parse(readFileSync(join(dir, 'build/production.json'), 'utf8'));
+  const moved = (plan.characters || []).filter((c: { id: string }) => !S.chars.includes(c.id));
+  const assets = [...(plan.assets || [])];
+  for (const c of moved) {
+    const index = assets.findIndex((a: { id: string }) => a.id === c.id);
+    if (index < 0) assets.push({ ...c, kind: 'image', status: 'drawn_in_code' });
+    else assets[index] = { ...c, ...assets[index] };
+  }
+  const characters = S.chars.map((id) => ({ id, file: `build/${id}.js`, sheet: `out/check/cast/sheet_${id}.jpg` }));
+  return {
+    'plan.json': { ...plan, assets, characters: (plan.characters || []).filter((c: { id: string }) => S.chars.includes(c.id)) },
+    'build/production.json': { ...prod, characters },
+    ...(characters.length ? { 'out/check/cast/sheet.jpg': 'jpg' } : {}),
+    ...Object.fromEntries(characters.map((c) => [c.sheet, 'jpg'])),
+  };
+}
+
 mock.module('./agents/index.ts', { namedExports: { runAgent: fakeAgent, agentStatus: () => ({ claude: 'fake', codex: null }) } });
 const J = await import('./jobs.ts');
 
@@ -128,14 +153,14 @@ function newProject(stage: 'plan_review' | 'error', extra: Record<string, unknow
   J.createJob({ id, title: 't', agent: 'claude', brief: 'make a video', reference: { type: 'url', src: 'https://example.com' } });
   const f = join(J.dirOf(id), 'job.json');
   writeFileSync(f, JSON.stringify({ ...J.load(id), stage, ...extra }));
-  if (stage === 'plan_review') writeFileSync(join(J.dirOf(id), 'plan.json'), JSON.stringify({ title: 'T', version: 1 }));
+  if (stage === 'plan_review') writeFileSync(join(J.dirOf(id), 'plan.json'), JSON.stringify({ title: 'T', version: 1, characters: S.chars.map((id) => ({ id })) }));
   return id;
 }
 const base = (o: Partial<Scenario> = {}): Scenario => ({
   chars: ['hero'], chunks: [{ id: 'C1', shots: ['S1'] }, { id: 'C2', shots: ['S2'] }],
   castPass: () => true, shotPass: () => true, critique: () => ({}), ...o,
 });
-beforeEach(() => { calls = []; for (const k of Object.keys(count)) delete count[k]; });
+beforeEach(() => { calls = []; agentSessions = []; for (const k of Object.keys(count)) delete count[k]; });
 
 describe('pre-production', () => {
   test('retrying a failed style step runs style → plan → characters → plan frames, then waits for approval', async () => {
@@ -224,7 +249,7 @@ describe('production', () => {
   test('a passed segment is rendered in the background and assembly waits for it', async () => {
     S = base({ prerender: 'node -e setTimeout(()=>{},300)' });
     const id = newProject('plan_review');
-    writeFileSync(join(J.dirOf(id), 'plan.json'), JSON.stringify({ title: 'T', version: 1, shots: [{ id: 'S1', start_s: 0, end_s: 2 }, { id: 'S2', start_s: 2, end_s: 4 }] }));
+    writeFileSync(join(J.dirOf(id), 'plan.json'), JSON.stringify({ title: 'T', version: 1, characters: S.chars.map((id) => ({ id })), shots: [{ id: 'S1', start_s: 0, end_s: 2 }, { id: 'S2', start_s: 2, end_s: 4 }] }));
     await J.approve(id);
     assert.equal(J.load(id).stage, 'done', J.load(id).error || '');
     const ev = readFileSync(join(J.dirOf(id), 'logs', 'events.jsonl'), 'utf8').trim().split(/\r?\n/).map((l) => JSON.parse(l));
@@ -238,7 +263,7 @@ describe('production', () => {
   test('when assembly stops waiting for a stuck background render, renders queued behind it never start', async () => {
     S = base({ prerender: 'node -e setTimeout(()=>{},20000)' });   // every background render hangs
     const id = newProject('plan_review');
-    writeFileSync(join(J.dirOf(id), 'plan.json'), JSON.stringify({ title: 'T', version: 1, shots: [{ id: 'S1', start_s: 0, end_s: 2 }, { id: 'S2', start_s: 2, end_s: 4 }] }));
+    writeFileSync(join(J.dirOf(id), 'plan.json'), JSON.stringify({ title: 'T', version: 1, characters: S.chars.map((id) => ({ id })), shots: [{ id: 'S1', start_s: 0, end_s: 2 }, { id: 'S2', start_s: 2, end_s: 4 }] }));
     await J.approve(id);
     assert.equal(J.load(id).stage, 'done', J.load(id).error || '');
     await new Promise((r) => setTimeout(r, 500));   // give a wrongly queued render time to show up
@@ -350,6 +375,91 @@ describe('pauses', () => {
     assert.deepEqual(calls, ['replan']);
     assert.equal(J.load(id).stage, 'plan_review');
     assert.equal(JSON.parse(readFileSync(join(J.dirOf(id), 'plan.json'), 'utf8')).version, 3);
+  });
+});
+
+describe('cast metadata recovery', () => {
+  const circle = { id: 'hero_dot', name: 'Animated circle', file: 'build/assets/hero_dot.js', motion: { burst: 'particles' } };
+  const asset = { id: 'hero_dot', file: circle.file, status: 'drawn_in_code', license: 'user-provided', purpose: 'Original animated circle' };
+  const plan = () => ({ title: 'Motion graphics', version: 3, characters: [circle], assets: [asset, { id: 'font', file: 'assets/font.woff2' }], shots: [{ id: 'S1', assets: ['hero_dot'], animation: { duration: 4 } }] });
+
+  test('fresh setup reconciles misclassified shapes before requiring a cast sheet', async () => {
+    S = base({ chars: [], repairCast: true });
+    const id = newProject('plan_review'), dir = J.dirOf(id), original = plan();
+    put(dir, 'plan.json', original);
+    await J.approve(id);
+    assert.equal(J.load(id).stage, 'done', J.load(id).error || '');
+    assert.equal(calls.filter((c) => c === 'setup').length, 1);
+    assert.ok(calls.includes('fix_format'));
+    assert.ok(!calls.some((c) => c.startsWith('cast_')));
+    const repaired = JSON.parse(readFileSync(join(dir, 'plan.json'), 'utf8'));
+    assert.deepEqual(repaired.characters, []);
+    assert.deepEqual(repaired.shots, original.shots);
+    assert.deepEqual(repaired.assets, [{ ...circle, ...asset }, original.assets[1]]);
+  });
+
+  test('retry repairs legacy mismatch without repeating setup, changing animations or rebuilding passed chunks', async () => {
+    S = base({ chars: [], repairCast: true });
+    const id = newProject('error', { failed: 'producing', sessionId: 'existing-director', pipeline: { phase: 'setup', cast: { pass: true }, chunks: { C1: { shots: ['S1'], state: 'passed', round: 2 } } } });
+    const dir = J.dirOf(id), original = plan();
+    const prod = { chunks: S.chunks, characters: [], rig_files: [], shot_files: { S1: 'build/scene.js' }, how_to_render: 'keep original renderer' };
+    put(dir, 'plan.json', original);
+    put(dir, 'build/production.json', prod);
+    put(dir, circle.file, 'original animated circle code');
+    put(dir, 'build/scene.js', 'original animation with hero_dot references');
+    put(dir, 'out/frames/S1.png', 'completed render');
+    await J.retry(id);
+    assert.equal(J.load(id).stage, 'done', J.load(id).error || '');
+    assert.equal(calls[0], 'reconcile_cast');
+    assert.equal(agentSessions[0], 'existing-director');
+    assert.ok(!calls.includes('setup'));
+    assert.ok(!calls.includes('build:C1'));
+    assert.ok(!calls.some((c) => c.startsWith('cast_')));
+    assert.ok(calls.includes('build:C2'));
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, 'build/production.json'), 'utf8')), prod);
+    const repaired = JSON.parse(readFileSync(join(dir, 'plan.json'), 'utf8'));
+    assert.deepEqual(repaired.shots, original.shots);
+    assert.deepEqual(repaired.assets, [{ ...circle, ...asset }, original.assets[1]]);
+    for (const [file, content] of [[circle.file, 'original animated circle code'], ['build/scene.js', 'original animation with hero_dot references'], ['out/frames/S1.png', 'completed render']]) assert.equal(readFileSync(join(dir, file), 'utf8'), content);
+    assert.equal(J.load(id).pipeline.chunks?.C1.round, 2);
+  });
+
+  test('a genuine planned character missing from production is restored and reviewed, even after a stale no-cast pass', async () => {
+    S = base({ repairCast: true });
+    const id = newProject('error', { failed: 'producing', pipeline: { cast: { pass: true, round: 0, state: 'passed' } } });
+    put(J.dirOf(id), 'plan.json', { characters: [{ id: 'hero', design: 'A talking circle with facial expressions' }] });
+    put(J.dirOf(id), 'build/production.json', { chunks: S.chunks, characters: [] });
+    await J.retry(id);
+    assert.equal(J.load(id).stage, 'done', J.load(id).error || '');
+    assert.equal(calls[0], 'reconcile_cast');
+    assert.ok(!calls.includes('setup'));
+    assert.ok(calls.includes('cast_qa:serial'));
+    assert.ok(calls.indexOf('build:C1') > calls.indexOf('cast_qa:serial'));
+    assert.ok(existsSync(join(J.dirOf(id), 'out/check/cast/sheet.jpg')));
+  });
+
+  test('missing real cast sheets get a targeted repair, never another setup', async () => {
+    S = base({ repairCast: true });
+    const id = newProject('error', { failed: 'producing' });
+    put(J.dirOf(id), 'plan.json', { characters: [{ id: 'hero' }] });
+    put(J.dirOf(id), 'build/production.json', { chunks: S.chunks, characters: [{ id: 'hero', file: 'build/hero.js', sheet: 'out/check/cast/sheet_hero.jpg' }] });
+    await J.retry(id);
+    assert.equal(J.load(id).stage, 'done', J.load(id).error || '');
+    assert.equal(calls[0], 'reconcile_cast');
+    assert.ok(!calls.includes('setup'));
+    assert.ok(calls.includes('cast_qa:serial'));
+  });
+
+  test('unresolved mismatch stops before cast or shot work instead of accepting an empty production cast', async () => {
+    S = base({ chars: [] });
+    const id = newProject('error', { failed: 'producing' });
+    put(J.dirOf(id), 'plan.json', { characters: [{ id: 'real_hero' }] });
+    put(J.dirOf(id), 'build/production.json', { chunks: S.chunks, characters: [] });
+    await J.retry(id);
+    assert.equal(J.load(id).stage, 'error');
+    assert.match(J.load(id).error || '', /planned character "real_hero" is missing/);
+    assert.deepEqual(calls, ['reconcile_cast', 'fix_format']);
+    assert.deepEqual(JSON.parse(readFileSync(join(J.dirOf(id), 'plan.json'), 'utf8')).characters, [{ id: 'real_hero' }]);
   });
 });
 

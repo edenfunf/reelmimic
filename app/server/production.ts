@@ -5,12 +5,13 @@
 import { existsSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { castGate } from './cast.ts';
+import { checkProduction } from './contract.ts';
 import { prerender, resetPrerenders, waitPrerenders } from './prerender.ts';
 import { blockerFree, reviewFix, sharedItems } from './review.ts';
 import { aborted } from './runner.ts';
 import { CONFIG, L, chat, collectNeeds, dirOf, load, log, pause, pipe, readJSON, rounds, setStage } from './store.ts';
 import { fail, step, turn, type TurnResult } from './turn.ts';
-import type { ChunkProgress, NeedRequest, Pipeline, Plan } from '../shared/types.ts';
+import type { ChunkProgress, NeedRequest, Pipeline } from '../shared/types.ts';
 import type { Chunk, ChunkReview, Production, ShotEntry } from './types.ts';
 
 const sharedLocks = new Map<string, Promise<unknown>>();   // per project: one director edits shared files at a time
@@ -29,14 +30,22 @@ async function reviewSlot<T>(id: string, fn: () => Promise<T>): Promise<T> {
 
 export async function production(id: string, { fresh = false } = {}): Promise<boolean> {
   const d = dirOf(id), prev: Pipeline = fresh ? {} : load(id).pipeline || {};
-  // a piece with no characters (typography, motion graphics) has no cast sheet to make
-  const sheet = (readJSON<Plan>(join(d, 'plan.json'))?.characters || []).length ? ['out/check/cast/sheet.jpg'] : [];
-  const hasSetup = !fresh && [join('build', 'production.json'), ...sheet].every((f) => existsSync(join(d, f)));
+  const hasSetup = !fresh && existsSync(join(d, 'build', 'production.json'));
   // 1) director: scaffold, shared assets, cast sheets, chunk plan (skipped when resuming)
   if (!hasSetup) {
     pipe(id, (p) => { p.phase = 'setup'; });
-    if (!(await step(id, 'producing', 'setup', {}, ['build/production.json', ...sheet]))) return false;
-  } else setStage(id, 'producing', { error: null, failed: null });
+    if (!(await step(id, 'producing', 'setup', {}, ['build/production.json']))) return false;
+  } else {
+    setStage(id, 'producing', { error: null, failed: null });
+    const issues = checkProduction(d);
+    if (issues.length) {
+      // Keep setup, shot files, animation and passed chunks. Repair only inconsistent metadata or missing cast artifacts.
+      const r = await turn(id, 'setup', { reconcile: issues }, ['build/production.json']);
+      if (!r.ok) return fail(id, 'producing', r);
+      delete prev.cast;
+      pipe(id, (p) => { delete p.cast; });   // a stale no-cast pass cannot exempt a recovered character from review
+    }
+  }
   // 2) cast gate, then 3) shot building. With overlapCast they run at the same time: shots only call the shared character
   //    definitions, so cast fixes flow into them; shot REVIEWS still wait until the cast has passed.
   resetPrerenders(id);   // a fresh or resumed production may render in the background again

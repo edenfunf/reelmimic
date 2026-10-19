@@ -3,7 +3,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { runAgent, type AgentResult } from './agents/index.ts';
-import { checkFile } from './contract.ts';
+import { checkFile, checkProduction } from './contract.ts';
 import { prompts as bootPrompts } from './prompts.ts';
 import { signalOf } from './runner.ts';
 import { CANCELLED, CONFIG, L, ROOT, chat, dirOf, listFiles, load, log, mtime, readText, setStage, update } from './store.ts';
@@ -81,7 +81,10 @@ export async function turn<P extends Phase>(id: string, phase: P, vars: StepVars
   if (!r.ok && !missing.length) return { ok: false, why: 'crashed', text: r.text, detail: r.stderr.slice(-300) };
   if (missing.length) return { ok: false, why: 'missing', text: r.text, missing };
   // the files are there; do they follow CONTRACT.md? One chance to fix them, in the same conversation
-  const check = () => must.filter((f) => f.endsWith('.json')).flatMap((f) => checkFile(f, readText(join(d, f)) ?? ''));
+  const check = () => [
+    ...must.filter((f) => f.endsWith('.json') && f !== 'build/production.json').flatMap((f) => checkFile(f, readText(join(d, f)) ?? '')),
+    ...(must.includes('build/production.json') ? checkProduction(d) : []),
+  ];
   let bad = check();
   if (bad.length && r.sessionId) {
     log(id, { type: 'error', text: `${label}: ${bad.join('; ')}`.slice(0, 400), who: label });
@@ -95,7 +98,8 @@ export async function turn<P extends Phase>(id: string, phase: P, vars: StepVars
 const fixFormat = (dir: string, bad: string[]) => `## 修正檔案格式
 專案資料夾：${dir}。你剛寫的檔案不符合 .claude/skills/video-clone/CONTRACT.md，伺服器讀不懂：
 ${bad.map((b) => `- ${b}`).join('\n')}
-只要把這些檔案照 CONTRACT.md 的格式重寫（內容保持你剛剛的判斷，只修格式），不要做別的事。`;
+只要把這些檔案照 CONTRACT.md 的格式重寫（內容保持你剛剛的判斷，只修格式），不要做別的事。
+If cast metadata disagrees, reconcile plan.characters and production.characters by ID. Abstract shapes, particles and typography belong in plan.assets unless they act as an actual character. Preserve every object, ID, file, existing asset, shot reference and animation; move misclassified entries into assets without overwriting existing asset metadata. Never erase a legitimate character to bypass cast review. Create missing cast sheets only for actual characters; do not repeat setup or rebuild completed work.`;
 
 export function fail(id: string, stageName: Stage, res: TurnResult) {
   const d = res.detail || '';

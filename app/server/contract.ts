@@ -1,6 +1,11 @@
 // The JSON files agents write and the server decides on (CONTRACT.md), checked when the turn that wrote them ends.
 // Only the fields the server reads are checked, and extra fields are fine. A broken file goes back to the agent that wrote it
 // (turn.ts) instead of being read as {} — an empty review would fail the gate, an empty plan would build nothing.
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Plan } from '../shared/types.ts';
+import type { Production } from './types.ts';
+
 type Check = (v: unknown, at: string) => string[];
 
 const kind = (v: unknown) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v);
@@ -58,4 +63,32 @@ export function checkFile(rel: string, text: string): string[] {
   try { v = JSON.parse(text); } catch (e) { return [`${rel}: not valid JSON (${(e as Error).message})`]; }
   const s = SCHEMAS.find(([re]) => re.test(rel));
   return s ? s[1](v, rel) : [];
+}
+
+// Setup and retries must agree on the cast before deciding which review artifacts are required.
+// Never infer "no characters" from an empty production array when the approved plan still lists a cast.
+export function checkProduction(dir: string): string[] {
+  const texts: Record<string, string> = {};
+  const bad = ['plan.json', 'build/production.json'].flatMap((file) => {
+    try { texts[file] = readFileSync(join(dir, file), 'utf8'); }
+    catch { return [`${file}: missing or unreadable`]; }
+    return checkFile(file, texts[file]);
+  });
+  if (bad.length) return bad;
+  const plan = JSON.parse(texts['plan.json']) as Plan, prod = JSON.parse(texts['build/production.json']) as Production;
+  const planned = plan.characters || [], produced = prod.characters || [];
+  const ids = new Set(planned.map((c) => c.id)), actual = new Set(produced.map((c) => c.id));
+  if (ids.size !== planned.length) bad.push('plan.json.characters: duplicate character IDs');
+  if (actual.size !== produced.length) bad.push('build/production.json.characters: duplicate character IDs');
+  for (const id of ids) if (!actual.has(id)) bad.push(`build/production.json.characters: planned character "${id}" is missing; reconcile cast versus assets without deleting scene objects`);
+  for (const id of actual) if (!ids.has(id)) bad.push(`build/production.json.characters: unplanned character "${id}"`);
+  // A mismatch needs a classification decision first, not an invented sheet for a motion-graphics asset.
+  if (bad.length) return bad;
+  if (produced.length && !existsSync(join(dir, 'out/check/cast/sheet.jpg'))) bad.push('out/check/cast/sheet.jpg: required for character-based production');
+  for (const c of produced) {
+    if (!c.file?.trim()) bad.push(`build/production.json.characters.${c.id}.file: required`);
+    if (!c.sheet?.trim()) bad.push(`build/production.json.characters.${c.id}.sheet: required`);
+    else if (!existsSync(join(dir, c.sheet))) bad.push(`${c.sheet}: missing character sheet for "${c.id}"`);
+  }
+  return bad;
 }

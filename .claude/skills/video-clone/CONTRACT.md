@@ -129,6 +129,24 @@ analysis/lyrics/subs.lrc|.json   使用者貼的歌詞，自動對時結果（�
 - 每一個「已修正」都要有 before/after 全解析度裁切；下一輪審查先核對這些，說修好但沒修好會原樣退回。
 - plan.json 新增 `required_inputs: [{ id, kind, label, why }]`：企劃核准前必須提供或略過。
 
+## Cast classification and production consistency
+
+`plan.characters` is the cast, not a list of everything that moves. Abstract shapes, circles, particles, typography,
+icons, diagrams and other motion-graphics objects belong in `plan.assets` (usually `status: "drawn_in_code"`).
+An object is a character when it has a persistent identity and character performance, such as expressions, poses or
+acting; an anthropomorphized shape can therefore be a legitimate character. Recurrence, animation or a "hero" name
+alone is not enough.
+
+`plan.characters` and `build/production.json.characters` must contain exactly the same unique IDs. Characterless
+projects use `characters: []` in both files and do not require cast sheets. A nonempty cast requires
+`out/check/cast/sheet.jpg` and each production character's `file` and existing `sheet` path.
+
+When recovering an older inconsistent project, reconcile the metadata instead of repeating completed setup. Move
+misclassified entries into assets with their original IDs, files and metadata, preserving existing asset fields,
+shot references, animations and rendered work. Restore missing production entries and sheets for actual characters;
+never drop a legitimate character to bypass review. Retrying validates existing setup before continuing its saved
+shot progress.
+
 ## assets/ASSETS.md
 
 每一個外部素材一行：`檔名 | 來源網站 | 原始網址 | 授權 | 作者/署名`。由 `scripts/fetch_assets.py get` 自動追加。

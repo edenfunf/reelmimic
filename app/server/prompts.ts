@@ -78,6 +78,20 @@ const QA_OUT = (file: string, extra = '') => `寫 ${file}（JSON）：${extra}
 **pass = 沒有任何 blocker**（polish 照寫，會交給後面的製作 agent 順手處理，不會擋住進度）。
 第 2 輪以後：先核對上一輪的修正；新發現的問題只有 blocker 才能讓這一輪不通過，不要每一輪都用放大鏡找新的小毛病。`;
 
+const CAST_CLASSIFICATION = `Cast versus assets: plan.characters contains only actual characters with a persistent identity and character performance (poses, expressions, acting or a character rig). Abstract circles, geometric shapes, particle clusters, typography, icons, diagrams, UI cards and decorative motion-graphics objects belong in plan.assets with status "drawn_in_code", even when animated, recurring or called "hero". An anthropomorphized shape that genuinely acts as a character still belongs in characters. Animation alone does not make an asset a character. Use characters: [] for characterless motion graphics; preserve asset IDs, files and shot references.`;
+
+// Reuse the director's setup role/session, but never send the scaffold/build instructions on recovery.
+const reconcileCast = (issues: string[]) => `
+## Step: reconcile cast metadata (resume completed setup)
+${CAST_CLASSIFICATION}
+Validation problems:
+${issues.map((issue) => `- ${issue}`).join('\n')}
+Read plan.json, build/production.json and the existing object definitions before deciding which entries are characters.
+This is a targeted recovery, NOT a new setup. Keep chunks, shot files, shared assets, renders, animation code, timing and all completed work unchanged.
+For misclassified motion-graphics objects, move the complete plan.characters entry into plan.assets using the same ID and file; merge without overwriting existing asset fields. Keep all shot references and animations intact. Set both characters arrays to [] only if there truly is no cast.
+For legitimate characters, retain the approved cast and restore the matching production.characters entries (id, file, sheet). Generate only missing individual cast sheets and out/check/cast/sheet.jpg, reusing existing definitions and render commands. Never remove a real character to make validation pass.
+Make the two character ID sets agree and save build/production.json; update plan.json only where classification needs correction. Do not restart setup, rebuild shots or assemble the video.`;
+
 export const prompts: Prompts = {
   // ---------- pre-production ----------
   style: (p) => `${HEADER(p)}
@@ -124,6 +138,7 @@ ${WOW}
    **變化**：在 STORYBOARD.md 列出每鏡的場景與機位，算出同一場景＋機位佔片長的比例（≤ 40%），高潮之間換場景或視角。
 4. 寫 plan.json（CONTRACT.md 格式）與 STORYBOARD.md：logline、look、borrowed_from_reference、角色／產品、每鏡時間、動作、轉場、reads、
    素材與音效；逐鏡對照：ref_shot、ref_what、camera（engine 規格、pace 跟參考一致）。平均鏡頭長度、字卡比例、暗調比例與參考接近（±30%）。
+${CAST_CLASSIFICATION}
 5. 角色：plan.characters 每個角色寫清楚造型（輪廓、比例、配色、髮型、服裝、特徵）與 id；使用者有給設計圖的角色寫 "design": "inputs/<圖>"，
    並量出設計圖的比例寫進描述（例如：身體寬:高 = 1.9:1、眼睛在上 1/3、手從身體中段水平伸出、4 隻短腳）。
    ${DESIGN}
@@ -160,6 +175,7 @@ ${WOW}
 ${ENGINE(p)}
 
 ## 步驟：整合前製結果、畫風格定調畫面
+${CAST_CLASSIFICATION}
 角色 agent 與素材 agent 已經做完（結果：${JSON.stringify(p.results)}）。
 1. 把 assets/fetched.json 合併進 plan.json 的 assets（file、source、license、attribution、status）；抓不到的改用替代方案並更新該項。
 2. 看每個角色的 out/check/cast/pre_*.jpg；明顯不符合企劃或拼接感的地方直接改角色檔（角色 agent 沒做的角色，你自己做）。
@@ -175,6 +191,7 @@ ${EYE}`,
   replan: (p) => `${HEADER(p)}
 
 ## 步驟：依使用者意見修改企劃
+${CAST_CLASSIFICATION}
 使用者的意見：
 ${p.message}
 
@@ -182,10 +199,12 @@ ${p.message}
 改動如果犧牲了參考片的核心（例如雙人故事改成獨角戲、拿掉高潮），在回報裡明講這個取捨。`,
 
   // ---------- production: setup → cast gate → shot line → assemble ----------
-  setup: (p) => `${HEADER(p)}
+  setup: (p) => p.reconcile ? `${HEADER(p)}\n${reconcileCast(p.reconcile)}` : `${HEADER(p)}
 ${ENGINE(p)}
 
 ## 步驟：製作準備（你是導演；接下來會有 ${p.config.builders} 個製作 agent 平行做鏡頭、每段做完立刻有獨立審查員檢查）
+${CAST_CLASSIFICATION}
+Before making cast sheets, ensure plan.characters and production.characters contain exactly the same character IDs. If an older plan misclassified an abstract object, move its full entry into plan.assets, preserving existing asset metadata, IDs, files, shot references and animations; do not silently omit it from production or remove it from the video. Legitimate characters require both the lineup sheet and their individual sheets.
 0. 前製已經做好的東西直接沿用、不要重做：build/ 的骨架、角色定義檔（plan.characters[].file）、assets/ 的素材、旁白草稿。
 1. 在 build/ 建好（或補齊）製作專案骨架：共用的東西先做好並鎖定（配色、字型、節拍表、共用道具、字幕層、背景），
    全片規格一開始就定好、寫進共用檔（最後評審最常退回的就是這些）：
