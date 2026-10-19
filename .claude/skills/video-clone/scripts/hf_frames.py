@@ -25,13 +25,15 @@ CACHE = os.path.join(tempfile.gettempdir(), "hf_frame_cache")
 
 
 def build_hash(build):
+    # Every file counts except the ones that can't change a frame: an allow-list of extensions missed .jpeg, .gif, .mp4,
+    # .webm, .mjs… and handed reviewers stale frames after those changed.
     h = hashlib.sha1()
     for root, dirs, files in os.walk(build):
-        dirs[:] = [d for d in dirs if d not in ("node_modules", "renders", "snapshots", ".git", "out")]
+        dirs[:] = sorted(d for d in dirs if d not in ("node_modules", "renders", "snapshots", ".git", "out"))
         for f in sorted(files):
-            if f.endswith((".html", ".js", ".css", ".json", ".svg", ".png", ".jpg", ".webp", ".woff", ".woff2", ".ttf", ".otf", ".mp3", ".m4a", ".wav")):
-                p = os.path.join(root, f); st = os.stat(p)
-                h.update(f"{os.path.relpath(p, build)}|{st.st_size}|{int(st.st_mtime_ns)}".encode())
+            if f.startswith(".") or f.endswith((".md", ".log")): continue   # .DS_Store, notes, logs
+            p = os.path.join(root, f); st = os.stat(p)
+            h.update(f"{os.path.relpath(p, build)}|{st.st_size}|{int(st.st_mtime_ns)}".encode())
     return h.hexdigest()[:16]
 
 
