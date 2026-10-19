@@ -157,14 +157,45 @@ async function productionNote(id: string, msg: string) {
 }
 
 // Freeze the engine at approval: the render uses this snapshot, so improving a skill never changes a job mid-flight.
-function snapshotEngine(id: string): EngineSnapshot | null {
-  const route = readJSON<{ engine?: string }>(join(dirOf(id), 'analysis', 'route.json')) || {}, eng = route.engine;
-  if (!eng) return null;
-  const src = join(ROOT, '.claude', 'skills', eng), dst = join(dirOf(id), 'build', 'engine', eng);
-  if (!existsSync(src)) return null;
+// Engines are the skill folders that carry a SKILL.md. A name that is not installed is resolved here -
+// corrected to the folder's spelling when the difference is only case, or replaced by the default engine -
+// instead of being swallowed into a null snapshot.
+const DEFAULT_ENGINE = 'general-video';
+
+export function installedEngines(): string[] {
+  const dir = join(ROOT, '.claude', 'skills');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((name) => existsSync(join(dir, name, 'SKILL.md'))).sort();
+}
+
+export function resolveEngine(name: string): { engine: string; resolvedFrom: string | null; fallback: boolean } | null {
+  const wanted = name.trim();
+  if (!wanted) return null;
+  const engines = installedEngines();
+  if (engines.includes(wanted)) return { engine: wanted, resolvedFrom: null, fallback: false };
+  const folded = wanted.toLowerCase();
+  const match = engines.find((e) => e.toLowerCase() === folded);
+  if (match) return { engine: match, resolvedFrom: wanted, fallback: false };
+  return null;
+}
+
+export function snapshotEngine(id: string): EngineSnapshot | null {
+  const routePath = join(dirOf(id), 'analysis', 'route.json');
+  const route = readJSON<{ engine?: string; [k: string]: unknown }>(routePath) || {}, eng = route.engine;
+  if (!eng) return null;   // no route.json at all: nothing was routed, nothing to freeze
+  const resolved = resolveEngine(eng);
+  const choice = resolved ?? { engine: DEFAULT_ENGINE, resolvedFrom: eng, fallback: true };
+  const src = join(ROOT, '.claude', 'skills', choice.engine), dst = join(dirOf(id), 'build', 'engine', choice.engine);
+  if (!existsSync(src)) return null;   // even the default is not installed; a freeze would be a lie
+  if (!choice.fallback && choice.resolvedFrom) {
+    route.engine = choice.engine;   // a case-only mismatch: one spelling everywhere from here on
+    writeFileSync(routePath, JSON.stringify(route, null, 1));
+  }
   mkdirSync(dst, { recursive: true });
   cpSync(src, dst, { recursive: true, filter: (f) => !/node_modules|[\\/]\.git([\\/]|$)/.test(f) });
-  const info = { engine: eng, frozenAt: now(), path: relative(ROOT, dst).replace(/\\/g, '/') };
+  const info: EngineSnapshot = { engine: choice.engine, frozenAt: now(), path: relative(ROOT, dst).replace(/\\/g, '/') };
+  if (choice.resolvedFrom) info.engineResolvedFrom = choice.resolvedFrom;
+  if (choice.fallback) info.fallback = true;
   writeFileSync(join(dst, 'SNAPSHOT.json'), JSON.stringify(info, null, 1));
   return info;
 }

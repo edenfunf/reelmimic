@@ -83,7 +83,15 @@ export interface Pipeline {
   final?: { round: number };
 }
 
-export interface EngineSnapshot { engine: string; frozenAt: string; path: string }
+export interface EngineSnapshot {
+  engine: string;
+  frozenAt: string;
+  path: string;
+  /** The route.json spelling when it differed from the installed folder. */
+  engineResolvedFrom?: string;
+  /** True when the routed engine was not installed and the default was frozen instead. */
+  fallback?: boolean;
+}
 
 export interface Job {
   id: string;
