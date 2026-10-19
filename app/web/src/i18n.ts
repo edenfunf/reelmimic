@@ -43,7 +43,7 @@ const EN: Record<string, string> = {
   '修改企劃': 'Revising plan', '生產中': 'Producing', '等你提供': 'Needs your input', '評審中': 'Reviewing', '修改中': 'Revising', '完成': 'Done', '需要處理': 'Needs attention',
   // progress & tabs
   '參考片': 'Reference', '風格拆解': 'Style', '生產': 'Production', '成品': 'Final', '生產線': 'Production line', '企劃': 'Plan', '參考片拆解': 'Reference analysis',
-  '待確認': 'Needs approval', '停止': 'Stop', '過程即時顯示在右側對話': 'Live progress is shown in the conversation on the right',
+  '待確認': 'Needs approval', '停止': 'Stop', '停止中': 'Stopping', '連不到伺服器，確認它還在執行，再試一次。': 'Can’t reach the server. Make sure it’s still running, then try again.', '過程即時顯示在右側對話': 'Live progress is shown in the conversation on the right',
   '拆解參考片': 'Analyzing the reference', '判斷風格與製作技能': 'Choosing the style and production skill', '寫前製企劃': 'Writing the plan', '寫企劃': 'Writing the plan',
   '修改成片': 'Revising the film', '審片': 'Reviewing the film',
   '導演建置角色與共用素材': 'Director is setting up characters and shared assets', '角色關：審查角色設定圖': 'Cast gate: reviewing character sheets',

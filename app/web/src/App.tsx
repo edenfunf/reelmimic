@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentKind, AgentStatus, ProjectSummary, Rounds } from '../../shared/types.ts';
 import { api } from './api.ts';
-import { I, BrandMark, Orb, Seg, AutoText, ago, RoundsEditor } from './ui.tsx';
+import { I, BrandMark, Orb, Seg, AutoText, ago, RoundsEditor, errorText } from './ui.tsx';
 import type { IconName, RoundValues } from './ui.tsx';
 import { Project, Status } from './Project.tsx';
 import { LANGS, lang as initialLang, setLang } from './i18n.ts';
@@ -108,7 +108,7 @@ function Composer({ agents }: { agents?: Partial<AgentStatus> }) {
     f.append('brief', brief); f.append('agent', agent); f.append('lang', document.documentElement.lang || 'zh-TW');
     inputs.forEach((x) => f.append('inputs', x));
     customRounds.forEach(([k, v]) => f.append(k, String(v)));
-    try { const { id } = await api.create(f); location.hash = `#/p/${id}`; } catch (e) { setErr((e as Error).message); setBusy(false); }
+    try { const { id } = await api.create(f); location.hash = `#/p/${id}`; } catch (e) { setErr(errorText(e)); setBusy(false); }
   };
   const yt = ytId(url);
   return (
