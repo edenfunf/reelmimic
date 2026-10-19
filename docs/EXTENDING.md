@@ -112,6 +112,13 @@ forward into the setup or build specs is the most effective speed-up.
 
 ## 4. Plug in another AI director
 
+For choosing another model on an existing CLI, use [advanced model routing](MODEL_ROUTING.md) instead of adding a
+transport. Its route resolver is independent of the runtime adapter. A new runtime (for example OpenCode) must still
+implement file/shell/image tools, streaming, cancellation and session resume; a text-only completion adapter cannot
+replace it. Add the runtime to shared types, route validation, CLI dispatch and deterministic tests together. Never
+infer that a missing tool event makes replay safe. Provider compatibility and capability declarations are separate
+from rendering engine selection.
+
 In `app/server/agents/index.ts`:
 
 1. Write `xxxArgs(sessionId, cwd)`: command-line arguments for a non-interactive run that auto-approves file edits

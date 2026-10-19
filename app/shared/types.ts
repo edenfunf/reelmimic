@@ -2,6 +2,13 @@
 // Files written by agents (plan.json, reviews, critique…) follow CONTRACT.md; only the fields the app reads are typed here.
 
 export type AgentKind = 'claude' | 'codex';
+export interface AgentRoute {
+  runtime: AgentKind;
+  model: string;
+  provider?: { id: string; baseUrl: string; protocol: 'responses' | 'anthropic'; envKey: string };
+  vision?: boolean;
+  timeoutMs?: number;
+}
 export type Lang = 'zh-TW' | 'en' | 'zh-CN';
 
 export type Stage =
@@ -40,9 +47,12 @@ export type AgentEvent =
   | { type: 'thinking'; text: string }
   | { type: 'tool'; name: string; detail: string }
   | { type: 'error'; text: string }
-  | { type: 'done'; ok: boolean; text: string; cost?: number | null };
+  | { type: 'done'; ok: boolean; text: string; cost?: number | null; usage?: Record<string, number> };
 
-export type TurnMarker = { type: 'turn'; state: 'start' | 'end'; phase: string; ok?: boolean };
+export type TurnMarker = {
+  type: 'turn'; state: 'start' | 'end'; phase: string; ok?: boolean;
+  routing?: { runtime: AgentKind; model: string; provider: string };
+};
 export type LogEntry = (AgentEvent | TurnMarker) & { who?: string };
 export type LogEvent = LogEntry & { ts: string };
 
@@ -97,6 +107,7 @@ export interface Job {
   error?: string | null;
   sessionId: string | null;
   sessions: Record<string, string>;
+  sessionRoutes?: Record<string, AgentRoute | null>;
   createdAt: string;
   updatedAt?: string;
   chat: ChatMessage[];

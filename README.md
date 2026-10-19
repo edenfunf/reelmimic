@@ -120,6 +120,17 @@ Codex reads `AGENTS.md`, so there's nothing else to set up.
 
 ## Settings
 
+### Advanced: model routing
+
+Optionally assign different models/providers to director, builder, reviewer and fixer roles through
+`~/.reelmimic/routing.json`. The normal Claude Code / Codex picker and existing authentication work unchanged without
+this file. Copy [`routing.example.json`](routing.example.json), replace its illustrative model IDs, and follow
+[model routing setup and compatibility limits](docs/MODEL_ROUTING.md). Run `cd app && npm run routing` for local
+diagnostics. Active sessions keep their selected route; automatic provider fallback is deferred to avoid replaying
+partially executed work. Custom Codex endpoints require Responses; Claude gateways require Anthropic format.
+
+### General settings
+
 API keys and a few paths go in `~/.reelmimic/secrets.json`. That file lives outside the repo, so it never gets
 committed. See [`secrets.example.json`](secrets.example.json) for the format.
 
@@ -128,6 +139,7 @@ committed. See [`secrets.example.json`](secrets.example.json) for the format.
 | `YATING_KEY` | Yating's Taiwanese Mandarin voices, for narration |
 | `PIXABAY_KEY`, `FREESOUND_KEY` | More images, music and sound effects you're allowed to use (optional, Openverse works without a key) |
 | `FFMPEG_DIR`, `CHROME_PATH`, `CODEX_BIN`, `PYTHON` | Where to find these tools if they're not on your PATH |
+| `CODEX_MODEL` | Optional Codex model default; an explicit role route takes precedence |
 | `CODEX_SANDBOX` | Codex sandbox mode (default `danger-full-access`, like Claude Code with Bash allowed; `workspace-write` blocks the Chrome renderer) |
 | `BUILDERS`, `MAX_AGENTS` | How many agents work on one video at once (default 6), and the limit across all projects (default 12) |
 | `PORT` | Web port (default 4318) |

@@ -3,11 +3,12 @@
 import { existsSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { runAgent, type AgentResult } from './agents/index.ts';
+import { preflightRoute, readRouting, resolveRoute, routeLabel, selectSessionRoute } from './agents/routing.ts';
 import { checkFile } from './contract.ts';
 import { prompts as bootPrompts } from './prompts.ts';
 import { signalOf } from './runner.ts';
 import { CANCELLED, CONFIG, L, ROOT, chat, dirOf, listFiles, load, log, mtime, readText, setStage, update } from './store.ts';
-import type { Stage } from '../shared/types.ts';
+import type { Stage, AgentRoute } from '../shared/types.ts';
 import type { Phase, Prompts, StepVars } from './types.ts';
 
 // prompts.ts is re-imported when it changes, so prompt fixes reach the next agent turn without restarting running jobs
@@ -51,19 +52,30 @@ export async function turn<P extends Phase>(id: string, phase: P, vars: StepVars
   const before = must.map((f) => mtime(join(d, f)));
   const sid = session === 'fresh' ? undefined : session === 'director' ? j.sessionId : (j.sessions || {})[session];
   const label = who || (session === 'fresh' ? 'reviewer' : session);
+  let route: AgentRoute | null;
+  try {
+    // A session's route is immutable, including a legacy null route. Fresh reviewers resolve independently.
+    const saved = session === 'fresh' ? undefined : j.sessionRoutes?.[session];
+    route = selectSessionRoute(saved, saved === undefined ? resolveRoute(readRouting(), id, phase) : null, sid);
+    preflightRoute(route, phase);
+    if (session !== 'fresh') update(id, (jj) => { jj.sessionRoutes ||= {}; jj.sessionRoutes[session] = route; });
+  } catch (e) { return { ok: false, why: 'crashed', detail: (e as Error).message }; }
   // one agent run in a slot; the session id is kept for the director and builders (a reviewer's only lives in this turn)
   const once = async (prompt: string, resume: string | null | undefined): Promise<AgentResult | null> => {
     if (!(await slot(phase, signal))) return null;
-    log(id, { type: 'turn', state: 'start', phase, who: label });
+    const routing = route ? { runtime: route.runtime, model: route.model, provider: route.provider?.id || 'unknown (CLI configured)' } : undefined;
+    log(id, { type: 'turn', state: 'start', phase, who: label, ...(routing ? { routing } : {}) });
+    if (route) log(id, { type: 'tool', name: 'model routing', detail: `${phase}: ${routeLabel(route, j.agent)}`, who: label });
     let res: AgentResult;
     try {
-      res = await runAgent({ kind: j.agent, cwd: ROOT, prompt, sessionId: resume, signal,
+      res = await runAgent({ kind: j.agent, cwd: ROOT, prompt, sessionId: resume, signal, route,
         onEvent: (e) => {
           if (e.type === 'session' && session !== 'fresh') update(id, (jj) => { if (session === 'director') jj.sessionId = e.id; else { jj.sessions = jj.sessions || {}; jj.sessions[session] = e.id; } });
-          if (e.type !== 'done') log(id, { ...e, who: label });
+          if (e.type !== 'done' || route) log(id, { ...e, who: label });
         } });
-    } finally { release(); }
-    log(id, { type: 'turn', state: 'end', phase, who: label, ok: !!res?.ok && !signal.aborted });
+    } catch (e) { res = { sessionId: resume, text: '', ok: false, code: null, stderr: (e as Error).message, lastError: (e as Error).message }; }
+    finally { release(); }
+    log(id, { type: 'turn', state: 'end', phase, who: label, ok: !!res?.ok && !signal.aborted, ...(routing ? { routing } : {}) });
     return signal.aborted ? null : res;
   };
   let r = await once((await livePrompts())[phase](p), sid);

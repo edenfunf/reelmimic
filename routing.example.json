@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "routes": {
+    "director": {
+      "runtime": "codex",
+      "model": "REPLACE_WITH_STRONG_VISION_MODEL",
+      "vision": true,
+      "provider": {
+        "id": "openrouter",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "protocol": "responses",
+        "envKey": "OPENROUTER_API_KEY"
+      }
+    },
+    "builder": {
+      "runtime": "codex",
+      "model": "REPLACE_WITH_CHEAP_CODING_MODEL",
+      "provider": {
+        "id": "openrouter",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "protocol": "responses",
+        "envKey": "OPENROUTER_API_KEY"
+      }
+    },
+    "reviewer": {
+      "runtime": "codex",
+      "model": "REPLACE_WITH_VISION_MODEL",
+      "vision": true,
+      "provider": {
+        "id": "openrouter",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "protocol": "responses",
+        "envKey": "OPENROUTER_API_KEY"
+      }
+    },
+    "backup": {
+      "runtime": "codex",
+      "model": "REPLACE_WITH_GATEWAY_VISION_MODEL",
+      "vision": true,
+      "provider": {
+        "id": "omnirouter",
+        "baseUrl": "http://127.0.0.1:4000/v1",
+        "protocol": "responses",
+        "envKey": "OMNIROUTER_API_KEY"
+      }
+    }
+  },
+  "groups": {
+    "director": "director",
+    "builder": "builder",
+    "reviewer": "reviewer",
+    "fixer": "builder"
+  }
+}

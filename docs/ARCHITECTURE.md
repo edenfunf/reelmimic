@@ -123,6 +123,13 @@ projects/<id>/
 
 ## 4. Agent adapters
 
+Optional [advanced model routing](MODEL_ROUTING.md) resolves complete runtime/model/provider routes in
+`agents/routing.ts`, then `turn.ts` pins them by resumable session in `job.sessionRoutes` before dispatch. Explicit role
+selection precedes group, project default, global default and legacy behavior. Existing session pins take precedence
+over later configuration edits. Fresh reviewers resolve independently. The same CLI adapters retain all tools,
+cancellation, global slots and artifact checks. Routed calls require a successful terminal event and apply a bounded
+timeout. No cross-provider automatic replay is performed. Provider cost/usage is logged only when returned.
+
 `agents/index.ts` turns both CLIs into the same events: `session`, `text`, `thinking`, `tool`, `error`, `done`.
 
 | | Claude Code | Codex |

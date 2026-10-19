@@ -2,7 +2,26 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AgentEvent } from '../../shared/types.ts';
-import { parseClaude, parseCodex } from './index.ts';
+import { codexArgs, parseClaude, parseCodex } from './index.ts';
+
+test('CODEX_MODEL is the legacy default; explicit role routing takes precedence', () => {
+  const previous = process.env.CODEX_MODEL;
+  try {
+    process.env.CODEX_MODEL = 'gpt-5.6-sol';
+    for (const session of [null, 'existing-session']) {
+      const args = codexArgs(session, 'project');
+      assert.equal(args[args.indexOf('--model') + 1], 'gpt-5.6-sol');
+      const routed = codexArgs(session, 'project', { runtime: 'codex', model: 'role-model' });
+      assert.equal(routed.filter((arg) => arg === '--model').length, 1);
+      assert.equal(routed[routed.indexOf('--model') + 1], 'role-model');
+    }
+    delete process.env.CODEX_MODEL;
+    assert.equal(codexArgs(null, 'project').includes('--model'), false);
+  } finally {
+    if (previous === undefined) delete process.env.CODEX_MODEL;
+    else process.env.CODEX_MODEL = previous;
+  }
+});
 
 const run = (parse: typeof parseClaude, lines: object[]) => {
   const events: AgentEvent[] = [], st = { sessionId: null, text: '', ok: false, cost: null, lastError: '' };

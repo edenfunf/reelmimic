@@ -9,6 +9,9 @@ import type { AgentRun } from './agents/index.ts';
 
 const TMP = mkdtempSync(join(tmpdir(), 'reelmimic-pipe-'));
 process.env.REELMIMIC_PROJECTS = TMP;
+const routingFile = join(TMP, 'routing.json');
+process.env.REELMIMIC_ROUTING = routingFile;
+writeFileSync(routingFile, JSON.stringify({ version: 1, routes: {} }));
 process.env.PRERENDER_WAIT_MS = '2000';   // assembly gives up on a stuck background render after 2 s here
 after(() => rmSync(TMP, { recursive: true, force: true }));
 
@@ -32,6 +35,7 @@ interface Scenario {
 const pending = new Map<string, { files: [string, unknown][]; always: boolean }>();   // per project: the good files a format fix writes
 let S: Scenario;
 let calls: string[] = [];
+let dispatches: AgentRun[] = [];
 const count: Record<string, number> = {};
 const bump = (k: string) => (count[k] = (count[k] || 0) + 1);
 
@@ -83,7 +87,9 @@ function outputs(prompt: string, dir: string): [string, Record<string, unknown>]
   throw new Error('fake agent: unknown step\n' + prompt.slice(0, 300));
 }
 
-async function fakeAgent({ cwd, prompt, onEvent, signal }: AgentRun) {
+async function fakeAgent(options: AgentRun) {
+  const { cwd, prompt, onEvent, signal } = options;
+  dispatches.push(options);
   const dir = resolve(cwd, prompt.match(/專案資料夾：(\S+?)[（。]/)![1]);
   if (/## 修正檔案格式/.test(prompt)) {
     calls.push('fix_format');
@@ -135,7 +141,45 @@ const base = (o: Partial<Scenario> = {}): Scenario => ({
   chars: ['hero'], chunks: [{ id: 'C1', shots: ['S1'] }, { id: 'C2', shots: ['S2'] }],
   castPass: () => true, shotPass: () => true, critique: () => ({}), ...o,
 });
-beforeEach(() => { calls = []; for (const k of Object.keys(count)) delete count[k]; });
+beforeEach(() => {
+  calls = []; dispatches = [];
+  writeFileSync(routingFile, JSON.stringify({ version: 1, routes: {} }));
+  for (const k of Object.keys(count)) delete count[k];
+});
+
+test('routed pipeline dispatches different models, pins resumable sessions and keeps reviewers fresh', async () => {
+  S = base({ shotPass: (_s, round) => round >= 2 });
+  const config = {
+    version: 1,
+    routes: {
+      strong: { runtime: 'codex', model: 'strong', vision: true },
+      cheap: { runtime: 'claude', model: 'cheap', vision: true },
+      eyes: { runtime: 'codex', model: 'eyes', vision: true },
+    },
+    groups: { director: 'strong', builder: 'cheap', reviewer: 'eyes', fixer: 'cheap' },
+  };
+  writeFileSync(routingFile, JSON.stringify(config));
+  const id = newProject('error', { failed: 'styling' });
+  await J.retry(id);
+  await J.approve(id);
+  assert.equal(J.load(id).stage, 'done', J.load(id).error || '');
+  for (const [i, name] of calls.entries()) {
+    const run = dispatches[i];
+    const expected = /^(cast_qa|shot_qa|critique)/.test(name) ? 'eyes' : /^(pre_cast|build:|fix:)/.test(name) ? 'cheap' : 'strong';
+    assert.equal(run.route?.model, expected, name);
+    if (expected === 'eyes') assert.equal(run.sessionId, undefined, name);
+    if (name.startsWith('fix:')) assert.ok(run.sessionId, 'builder resumes for fixes');
+  }
+  assert.equal(J.load(id).sessionRoutes?.director?.model, 'strong');
+  config.routes.strong.model = 'replacement'; config.routes.eyes.model = 'new-eyes';
+  writeFileSync(routingFile, JSON.stringify(config));
+  dispatches = []; calls = [];
+  await J.message(id, 'make the title bigger');
+  assert.equal(dispatches[0].route?.model, 'strong');
+  assert.equal(dispatches[1].route?.model, 'new-eyes');
+  assert.ok(dispatches[0].sessionId);
+  assert.equal(dispatches[1].sessionId, undefined);
+});
 
 describe('pre-production', () => {
   test('retrying a failed style step runs style → plan → characters → plan frames, then waits for approval', async () => {

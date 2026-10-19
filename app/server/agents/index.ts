@@ -11,12 +11,13 @@
 //   { type: 'error', text }                       stderr or a failure
 //
 // The prompt always goes through stdin, so nothing user-typed is ever put on a command line.
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, isAbsolute } from 'node:path';
 import type { Readable } from 'node:stream';
-import type { AgentEvent, AgentKind, AgentStatus } from '../../shared/types.ts';
+import type { AgentEvent, AgentKind, AgentStatus, AgentRoute } from '../../shared/types.ts';
 import { killTree, treeOpts } from '../runner.ts';
+import { redact } from './routing.ts';
 
 const IS_WIN = process.platform === 'win32';
 // An old codex-cli can shadow a current one on PATH (e.g. a runtime manager's copy). Prefer CODEX_BIN, then npm's global shim.
@@ -32,10 +33,11 @@ export interface AgentRun {
   sessionId?: string | null;
   onEvent?: (e: AgentEvent) => void;
   signal?: AbortSignal;
+  route?: AgentRoute | null;
 }
 export interface AgentResult { sessionId?: string | null; text: string; ok: boolean; code: number | null; stderr: string; lastError: string }
 // Turn state while the CLI streams: filled in by the parsers, returned when the process closes
-interface TurnState { sessionId?: string | null; text: string; ok: boolean; cost: number | null; lastError: string }
+interface TurnState { sessionId?: string | null; text: string; ok: boolean; cost: number | null; lastError: string; usage?: Record<string, number> }
 type Emit = (e: AgentEvent) => void;
 // One line of the CLIs' JSON streams; only the fields read below
 type Json = Record<string, any>;   // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -67,9 +69,10 @@ function lines(stream: Readable, onLine: (l: string) => void) {
 
 const short = (v: unknown, n = 400) => { const s = typeof v === 'string' ? v : JSON.stringify(v); return s.length > n ? s.slice(0, n) + '…' : s; };
 
-function claudeArgs(sessionId?: string | null) {
+export function claudeArgs(sessionId?: string | null, route?: AgentRoute | null) {
   const a = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'acceptEdits', '--allowedTools', CLAUDE_TOOLS];
   if (sessionId) a.push('--resume', sessionId);
+  if (route) a.push('--model', route.model);
   return a;
 }
 export function parseClaude(obj: Json, emit: Emit, st: TurnState) {
@@ -84,13 +87,30 @@ export function parseClaude(obj: Json, emit: Emit, st: TurnState) {
   if (obj.type === 'result') { st.ok = obj.subtype === 'success' && !obj.is_error; if (obj.result) st.text = obj.result; st.cost = obj.total_cost_usd; }
 }
 
-function codexArgs(sessionId: string | null | undefined, cwd: string) {
+export function codexArgs(sessionId: string | null | undefined, cwd: string, route?: AgentRoute | null) {
   // No approval prompts (headless). Codex's workspace-write sandbox can't start Chrome (spawn EPERM), and every render
   // needs it, so the default is full access — the same reach Claude Code gets with Bash allowed. Set CODEX_SANDBOX=
   // workspace-write to keep the sandbox (planning works; rendering won't). Set via -c: works for exec and resume.
   const mode = process.env.CODEX_SANDBOX || 'danger-full-access';
   const common = ['--json', '--skip-git-repo-check', '-c', `sandbox_mode=${mode}`, '-c', 'approval_policy=never',
+    ...(!route && process.env.CODEX_MODEL ? ['--model', process.env.CODEX_MODEL] : []),
     ...(mode === 'workspace-write' ? ['-c', 'sandbox_workspace_write.network_access=true'] : [])];
+  if (route) {
+    common.push('--model', route.model);
+    if (route.provider) {
+      const p = route.provider;
+      for (const [key, value] of Object.entries({
+        model_provider: 'reelmimic_route',
+        'model_providers.reelmimic_route.name': p.id,
+        'model_providers.reelmimic_route.base_url': p.baseUrl,
+        'model_providers.reelmimic_route.wire_api': 'responses',
+        'model_providers.reelmimic_route.env_key': p.envKey,
+        'model_providers.reelmimic_route.requires_openai_auth': false,
+        'model_providers.reelmimic_route.request_max_retries': 0,
+        'model_providers.reelmimic_route.stream_max_retries': 0,
+      })) common.push('-c', `${key}=${JSON.stringify(value)}`);
+    }
+  }
   return sessionId ? ['exec', 'resume', ...common, sessionId, '-'] : ['exec', ...common, '-C', cwd, '-'];
 }
 export function parseCodex(obj: Json, emit: Emit, st: TurnState) {
@@ -101,37 +121,82 @@ export function parseCodex(obj: Json, emit: Emit, st: TurnState) {
   if (it && obj.type === 'item.started' && it.type === 'command_execution') emit({ type: 'tool', name: 'shell', detail: short(it.command) });
   if (it && obj.type === 'item.completed' && it.type === 'reasoning' && (it.text || '').trim()) emit({ type: 'thinking', text: short(it.text, 1200) });
   if (it && obj.type === 'item.completed' && it.type === 'file_change') emit({ type: 'tool', name: 'edit', detail: short((it.changes || []).map((c: { path: string }) => c.path).join(', ')) });
-  if (obj.type === 'turn.completed') st.ok = true;
+  if (obj.type === 'turn.completed') {
+    st.ok = true;
+    if (obj.usage && typeof obj.usage === 'object') st.usage = Object.fromEntries(Object.entries(obj.usage).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1])));
+  }
   if (obj.type === 'turn.failed' || obj.type === 'error') { st.ok = false; emit({ type: 'error', text: short(obj.error?.message || obj.message || obj, 400) }); }
 }
 
-export function runAgent({ kind, cwd, prompt, sessionId, onEvent = () => {}, signal }: AgentRun): Promise<AgentResult> {
+export function routeEnvironment(route?: AgentRoute | null): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, HYPERFRAMES_NO_TELEMETRY: '1', DO_NOT_TRACK: '1' };
+  if (route?.runtime === 'claude' && route.provider) {
+    env.ANTHROPIC_BASE_URL = route.provider.baseUrl;
+    env.ANTHROPIC_AUTH_TOKEN = env[route.provider.envKey];
+    delete env.ANTHROPIC_API_KEY;
+    delete env.CLAUDE_CODE_OAUTH_TOKEN;
+  }
+  return env;
+}
+
+// Routed arguments must never go through cmd.exe: model IDs and TOML contain quotes.
+// Run npm's JS entry directly on Windows; native executables also use shell:false.
+export function routedCommand(cmd: string, kind: AgentKind): { cmd: string; prefix: string[] } {
+  if (isAbsolute(cmd) && /\.[cm]?js$/i.test(cmd) && existsSync(cmd)) return { cmd: process.execPath, prefix: [cmd] };
+  if (!IS_WIN) return { cmd, prefix: [] };
+  const found = isAbsolute(cmd) ? cmd : (spawnSync('where.exe', [cmd], { encoding: 'utf8', windowsHide: true }).stdout || '').trim().split(/\r?\n/)[0];
+  if (found && /\.exe$/i.test(found)) return { cmd: found, prefix: [] };
+  if (found) {
+    const entry = join(dirname(found), 'node_modules', ...(kind === 'codex' ? ['@openai', 'codex', 'bin', 'codex.js'] : ['@anthropic-ai', 'claude-code', 'cli.js']));
+    if (existsSync(entry)) return { cmd: process.execPath, prefix: [entry] };
+  }
+  throw new Error('Model routing: CLI not found as a native executable or standard npm installation; check PATH/CODEX_BIN');
+}
+
+export function runAgent({ kind, cwd, prompt, sessionId, onEvent = () => {}, signal, route }: AgentRun): Promise<AgentResult> {
+  if (signal?.aborted) return Promise.resolve({ sessionId, text: '', ok: false, code: null, stderr: '', lastError: 'Cancelled' });
+  kind = route?.runtime || kind;
+  const cmd = kind === 'claude' ? 'claude' : codexBin();
+  const launch = route ? routedCommand(cmd, kind) : { cmd, prefix: [] };
   return new Promise((resolve) => {
     const st: TurnState = { sessionId, text: '', ok: false, cost: null, lastError: '' };
-    const emit: Emit = (e) => { if (e.type === 'error') st.lastError = e.text; onEvent(e); };   // keep the last error for the job's error card
+    const env = routeEnvironment(route);
+    const clean = (s: string) => route ? redact(s, env) : s;
+    const emit: Emit = (e) => {
+      if (route) e = Object.fromEntries(Object.entries(e).map(([k, v]) => [k, typeof v === 'string' ? clean(v) : v])) as AgentEvent;
+      if (e.type === 'error') st.lastError = e.text;
+      onEvent(e);
+    };
     const isClaude = kind === 'claude';
-    const cmd = isClaude ? 'claude' : codexBin();
-    const args = isClaude ? claudeArgs(sessionId) : codexArgs(sessionId, cwd);
+    const args = isClaude ? claudeArgs(sessionId, route) : codexArgs(sessionId, cwd, route);
     // Windows: npm shims (claude.cmd) need a shell; args are fixed literals, the prompt goes through stdin.
     // its own process group (POSIX), so a cancel stops the renders and browsers it started too, not only the CLI
-    const child = spawn(cmd, args, { cwd, shell: IS_WIN, ...treeOpts, env: { ...process.env, HYPERFRAMES_NO_TELEMETRY: '1', DO_NOT_TRACK: '1' } });
+    const child = spawn(launch.cmd, [...launch.prefix, ...args], { cwd, shell: route ? false : IS_WIN, windowsHide: true, ...treeOpts, env });
+    let timedOut = false;
+    const timer = route ? setTimeout(() => { timedOut = true; killTree(child); }, route.timeoutMs || 7200000) : undefined;
     // the signal lives as long as the whole flow: drop the listener when this turn ends, so finished children aren't killed (or kept) later
     const onAbort = () => killTree(child);
     if (signal) { if (signal.aborted) killTree(child); else signal.addEventListener('abort', onAbort, { once: true }); }
     lines(child.stdout, (l) => {
-      let obj: Json; try { obj = JSON.parse(l); } catch { return; }
+      let obj: Json; try { obj = JSON.parse(clean(l)); } catch { return; }
       (isClaude ? parseClaude : parseCodex)(obj, emit, st);
     });
     let err = '';
-    lines(child.stderr, (l) => { err += l + '\n'; if (!/^\s*$/.test(l) && !/DeprecationWarning|ExperimentalWarning/.test(l)) emit({ type: 'error', text: short(l, 400) }); });
+    lines(child.stderr, (l) => {
+      if (route) l = /rate limit|quota|usage limit|429|credit balance/i.test(l) ? 'Provider quota or rate limit; check provider dashboard and retry manually' : 'Agent CLI diagnostic; check CLI authentication, model and endpoint protocol';
+      err += l + '\n'; if (!/^\s*$/.test(l) && !/DeprecationWarning|ExperimentalWarning/.test(l)) emit({ type: 'error', text: short(l, 400) });
+    });
     child.on('error', (e) => { emit({ type: 'error', text: `${cmd} failed to start: ${e.message}` }); });
     child.on('close', (code) => {
       signal?.removeEventListener('abort', onAbort);
+      clearTimeout(timer);
       if (code !== 0) st.ok = false;
-      else if (!isClaude && st.ok === false && !err) st.ok = true;
-      onEvent({ type: 'done', ok: st.ok, text: st.text, cost: st.cost });
-      resolve({ sessionId: st.sessionId, text: st.text, ok: st.ok, code, stderr: err.slice(-2000), lastError: st.lastError });
+      else if (!route && !isClaude && st.ok === false && !err) st.ok = true;
+      if (timedOut || signal?.aborted) { st.ok = false; st.lastError = timedOut ? 'Agent timeout; inspect artifacts before retrying' : 'Cancelled'; }
+      emit({ type: 'done', ok: st.ok, text: clean(st.text), cost: st.cost ?? null, ...(st.usage ? { usage: st.usage } : {}) });
+      resolve({ sessionId: st.sessionId, text: clean(st.text), ok: st.ok, code, stderr: err.slice(-2000), lastError: clean(st.lastError) });
     });
+    child.stdin.on('error', () => {}); // an early CLI rejection can close stdin before the prompt is consumed
     child.stdin.end(prompt, 'utf8');
   });
 }
