@@ -135,6 +135,16 @@ describe('required inputs', () => {
     assert.equal(status().song, 'provided');
     assert.deepEqual(J.openInputs(id), []);
   });
+  test('a corrupt plan.json blocks approval instead of clearing the gate', async () => {
+    const cid = newJob().id;
+    writePlan(cid, { required_inputs: [{ id: 'logo', kind: 'image', label: 'Logo' }] });
+    assert.equal(J.openInputs(cid).length, 1);
+    writeFileSync(join(J.dirOf(cid), 'plan.json'), '{corrupt json,,');
+    const open = J.openInputs(cid);
+    assert.equal(open.length, 1);
+    assert.equal(open[0].id, 'plan');
+    await assert.rejects(J.approve(cid), (e: Error & { code?: number }) => e.code === 409 && /plan\.json/.test(e.message));
+  });
 });
 
 describe('restart recovery', () => {
