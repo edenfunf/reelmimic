@@ -20,7 +20,16 @@ export function requiredInputs(id: string, plan: Plan | null, job: Job): Require
     return { ...r, status, files: given };
   });
 }
-export function openInputs(id: string) { return requiredInputs(id, readJSON<Plan>(join(dirOf(id), 'plan.json')), load(id)).filter((r) => r.status === 'missing'); }
+export function openInputs(id: string) {
+  const planPath = join(dirOf(id), 'plan.json'), plan = readJSON<Plan>(planPath);
+  if (!plan && existsSync(planPath)) {
+    // A plan file that exists but cannot be parsed must block approval.
+    // readJSON swallows the parse error (store.ts), and (plan?.required_inputs || [])
+    // would otherwise silently clear the gate.
+    return [{ id: 'plan', kind: 'other', label: 'plan.json', why: 'unreadable', status: 'missing', files: [] }];
+  }
+  return requiredInputs(id, plan, load(id)).filter((r) => r.status === 'missing');
+}
 export function waive(id: string, inputId: string) { update(id, (j) => { j.waived = [...new Set([...(j.waived || []), inputId])]; j.needs = (j.needs || []).filter((n) => n.input !== inputId); }); }
 export function unwaive(id: string, inputId: string) { update(id, (j) => { j.waived = (j.waived || []).filter((x) => x !== inputId); }); }
 
