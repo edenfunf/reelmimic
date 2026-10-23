@@ -98,10 +98,19 @@ export function recentLog(id: string): LogEvent[] {
   recent.set(id, list);
   return list;
 }
+const unwritableLog = new Set<string>();
 export function log(id: string, ev: LogEntry) {
   const e = { ts: now(), ...ev }, list = recentLog(id);
   list.push(e); if (list.length > LOG_KEEP) list.splice(0, list.length - LOG_KEEP);
-  try { mkdirSync(dirname(eventsFile(id)), { recursive: true }); appendFileSync(eventsFile(id), JSON.stringify(e) + '\n'); } catch {}
+  try { mkdirSync(dirname(eventsFile(id)), { recursive: true }); appendFileSync(eventsFile(id), JSON.stringify(e) + '\n'); unwritableLog.delete(id); }
+  catch {
+    // The event survives in memory, but everything after this point is lost on restart.
+    // Say so once (a full disk or a locked project folder must not fail silently).
+    if (!unwritableLog.has(id)) {
+      unwritableLog.add(id);
+      try { chat(id, 'system', L(id, '事件紀錄寫不進去，歷史訊息只留在記憶體裡，重開後會遺失；請檢查磁碟空間與專案目錄權限。', 'The event log is not writable; history stays in memory only and will be lost on restart. Check disk space and project directory permissions.')); } catch {}
+    }
+  }
   bus.emit('job', id, { type: 'log', ev: e });
 }
 export function touch(id: string) { update(id, () => {}); }   // tell open pages to reload (e.g. after files were added)

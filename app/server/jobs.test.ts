@@ -135,6 +135,16 @@ describe('required inputs', () => {
     assert.equal(status().song, 'provided');
     assert.deepEqual(J.openInputs(id), []);
   });
+  test('an unwritable event log warns once in chat instead of losing history silently', async () => {
+    const S = await import('./store.ts');
+    const cid = newJob().id;
+    writeFileSync(join(J.dirOf(cid), 'logs'), 'x');   // block the log path (disk-full/locked-folder land here)
+    S.log(cid, { type: 'text', text: 'hello' });
+    S.log(cid, { type: 'text', text: 'world' });
+    const texts = J.load(cid).chat.map((c) => c.text || '');
+    assert.equal(texts.filter((t) => /not writable|寫不進去/.test(t)).length, 1);
+    assert.ok(S.recentLog(cid).some((e) => (e as { text?: string }).text === 'hello'));
+  });
 });
 
 describe('restart recovery', () => {
