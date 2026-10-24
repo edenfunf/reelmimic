@@ -101,7 +101,7 @@ export function fail(id: string, stageName: Stage, res: TurnResult) {
   const d = res.detail || '';
   const error = {
     aborted: () => L(id, CANCELLED.zh, CANCELLED.en),
-    limit: () => L(id, `AI 帳號的用量到上限了，等額度恢復或換另一個 AI 導演再按「重試這一步」。原始訊息：${d}`, `Your AI account hit its usage limit. Wait until it resets (or switch to the other AI director), then click “Retry this step”. Message: ${d}`),
+    limit: () => L(id, `AI 帳號的用量到上限了，等額度恢復或換另一個 AI 導演再按「重試這一步」。原始訊息：${d}`, `Your AI account hit its usage limit. Wait until it resets (or switch to another AI director), then click “Retry this step”. Message: ${d}`),
     missing: () => L(id, `缺少輸出：${(res.missing || []).join(', ')}`, `Missing output: ${(res.missing || []).join(', ')}`),
     invalid: () => L(id, `agent 寫的檔案格式不對（已請它重寫一次）：${d}`, `The agent's files don't follow the contract (it was asked to rewrite them once): ${d}`),
     crashed: () => L(id, `agent 回合失敗${d ? '：' + d : ''}`, `The agent turn failed${d ? ': ' + d : ''}`),

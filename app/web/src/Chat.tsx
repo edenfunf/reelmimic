@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, Job, LogEvent, Stage } from '../../shared/types.ts';
+import { AGENT_LABEL } from '../../shared/types.ts';
 import { api } from './api.ts';
 import { I, Orb, Md, AutoText, Seg, useNow, dur, clock } from './ui.tsx';
 import type { IconName } from './ui.tsx';
@@ -190,7 +191,7 @@ export function Conversation({ id, s, tag, setTag, onZoom }: { id: string; s: Sn
     <aside className="convo">
       <div className="convo-h">
         <Orb size={30} live={working} idle={!working} />
-        <div className="grow"><b>AI 導演</b><div className="sub">{job.agent === 'codex' ? 'Codex' : 'Claude Code'}{working && <><span>·</span><span className="dot live" />{live.length > 1 ? `${live.length} 個 agent 同時工作中` : '工作中'}</>}</div></div>
+        <div className="grow"><b>AI 導演</b><div className="sub">{AGENT_LABEL[job.agent]}{working && <><span>·</span><span className="dot live" />{live.length > 1 ? `${live.length} 個 agent 同時工作中` : '工作中'}</>}</div></div>
         <Seg value={tab} onChange={setTab} options={[{ value: 'chat', label: '對話' }, { value: 'log', label: '紀錄' }]} />
       </div>
       {tab === 'log' ? <LogView id={id} job={job} /> : <>
