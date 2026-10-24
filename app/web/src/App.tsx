@@ -136,7 +136,7 @@ function Composer({ agents }: { agents?: Partial<AgentStatus> }) {
             <button className="btn sm" onClick={(e) => { e.stopPropagation(); setLinkMode(true); }}><I n="link" />貼連結</button>
           </div>
         )}
-        <input ref={pick} type="file" accept="video/*" hidden onChange={(e) => setVideo(e.target.files![0])} />
+        <input ref={pick} type="file" accept="video/*" hidden onChange={(e) => { setVideo(e.target.files![0]); e.target.value = ''; }} />
         <AutoText minRows={3} placeholder="你想做什麼樣的影片？主題、長度、角色、想保留參考片的哪些地方…" value={brief} onChange={(e) => setBrief(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(); }} />
         <div className="comp-bar">
@@ -144,7 +144,7 @@ function Composer({ agents }: { agents?: Partial<AgentStatus> }) {
           {file && <button className="tool-chip" onClick={() => setFile(null)}><I n="x" />移除</button>}
           <button className={`tool-chip ${inputs.length ? 'on' : ''}`} onClick={() => assets.current!.click()} title="配樂、歌詞、圖片、Logo、自家角色設計圖">
             <I n="clip" />素材{inputs.length > 0 && <span className="n">{inputs.length}</span>}</button>
-          <input ref={assets} type="file" multiple hidden onChange={(e) => setInputs([...e.target.files!])} />
+          <input ref={assets} type="file" multiple hidden onChange={(e) => { setInputs([...e.target.files!]); e.target.value = ''; }} />
           <button className={`tool-chip ${quality !== DEFAULT_QUALITY ? 'on' : ''}`} onClick={() => { setQualityOpen(!qualityOpen); setRoundsOpen(false); }} aria-expanded={qualityOpen} title="品質越高，檢查越細、時間越長">
             <I n="spark" />{QUALITY_INFO[quality].label}</button>
           {defaults && <button className={`tool-chip ${customRounds.length ? 'on' : ''}`} onClick={() => { setRoundsOpen(!roundsOpen); setQualityOpen(false); }} aria-expanded={roundsOpen} title="每一關最多審查、修改幾輪">
