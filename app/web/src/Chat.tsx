@@ -175,15 +175,16 @@ export function Conversation({ id, s, tag, setTag, onZoom }: { id: string; s: Sn
   const working = !!STAGE_DO[job.stage];
   useEffect(() => { const b = box.current; if (b && stick.current) b.scrollTop = b.scrollHeight; }, [out.length, live.length, job.log?.[job.log.length - 1]?.ts]);
   const onScroll = () => { const b = box.current!; stick.current = b.scrollHeight - b.scrollTop - b.clientHeight < 80; };
+  const inFlight = useRef(false);   // Enter doesn't go through the disabled send button: a second press mid-send sent it twice
   const send = async () => {
-    if ((!text.trim() && !files.length) || !canTalk) return; setErr(''); setSending(true);
+    if ((!text.trim() && !files.length) || !canTalk || inFlight.current) return; inFlight.current = true; setErr(''); setSending(true);
     const meta: MessageMeta = tag ? { ...(tag.shot && { shot: tag.shot }), ...(tag.time != null && { time: tag.time }) } : {};
     const t = tag?.q ? `關於「${tag.q}」：${text}` : text || '（見附件）';
     try {
       if (files.length) { const fd = new FormData(); files.forEach((x) => fd.append('inputs', x.f)); meta.attachments = (await api.addInputs(id, fd, 'attachments')).saved; }
       await api.message(id, t, meta); setText(''); setTag(null); files.forEach((x) => x.url && URL.revokeObjectURL(x.url)); setFiles([]); stick.current = true;
     } catch (e) { setErr((e as Error).message); }
-    setSending(false);
+    inFlight.current = false; setSending(false);
   };
   const hint = job.stage === 'plan_review' ? '對企劃提意見，例如：S3 的轉場想更誇張…' : job.stage === 'done' ? '對成片提意見，例如：12 秒那裡太快看不懂…' : job.stage === 'needs_input' ? '告訴導演怎麼處理，或補充說明…' : job.stage === 'error' ? '說明要怎麼處理這個問題…' : ['new', 'analyzing', 'styling', 'styled', 'planning', 'replanning'].includes(job.stage) ? '企劃還在寫，可以先補充想法，導演會一併放進企劃…' : 'AI 工作中，這一輪完成後就可以說話';
   return (
