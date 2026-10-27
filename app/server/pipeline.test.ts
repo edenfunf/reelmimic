@@ -497,6 +497,18 @@ describe('restart', () => {
 });
 
 describe('one flow per project', () => {
+  for (const [label, providerError] of [
+    ['HTTP 429', 'exceeded retry limit, last status: 429 Too Many Requests'],
+    ['HTTP 402', 'unexpected status 402 Payment Required: insufficient available credits'],
+  ]) test(`a provider ${label} is reported as a limit even when required outputs are missing`, async () => {
+    S = base({ crash: (step) => step === 'style' ? providerError : null });
+    const id = newProject('error', { failed: 'styling' });
+    await J.retry(id);
+    assert.equal(J.load(id).stage, 'error');
+    assert.match(J.load(id).error || '', /用量、額度或速率限制|usage, credit, or rate limit/);
+    assert.ok(!(J.load(id).error || '').includes('Missing output'));
+  });
+
   test('an agent that fails inside the parallel cast gate is reported as that error, not as a failed review', async () => {
     S = base({ chars: ['hero', 'cat'], crash: (s) => (s === 'cast_qa:cat' ? 'You hit your limit' : null) });
     const id = newProject('plan_review');
@@ -504,7 +516,7 @@ describe('one flow per project', () => {
     const j = J.load(id);
     assert.equal(j.stage, 'error');
     assert.equal(j.failed, 'producing');
-    assert.match(j.error || '', /用量到上限|usage limit/);
+    assert.match(j.error || '', /用量、額度或速率限制|usage, credit, or rate limit/);
     assert.ok(!calls.includes('assemble'));
   });
 

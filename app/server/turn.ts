@@ -44,7 +44,7 @@ function release() { used--; const w = waiters.shift(); if (w) w.r(true); }
 export interface TurnOpts { session?: string; who?: string }
 type Why = 'aborted' | 'limit' | 'missing' | 'invalid' | 'crashed';
 export interface TurnResult { ok: boolean; why?: Why; text?: string; missing?: string[]; detail?: string }
-const LIMIT = /usage limit|rate limit|hit your limit|limit reached|quota|credit balance/i;
+const LIMIT = /usage limit|rate limit|hit your limit|limit reached|quota|credit balance|insufficient credits|available credits|payment required|\b(?:402|429)\b|too many requests/i;
 export async function turn<P extends Phase>(id: string, phase: P, vars: StepVars[P], must: string[], { session = 'director', who }: TurnOpts = {}): Promise<TurnResult> {
   const j = load(id), d = dirOf(id), signal = signalOf(id);
   const p = { dir: relative(ROOT, d).replace(/\\/g, '/'), brief: readText(join(d, 'brief.md')) || '', inputs: listFiles(id, 'inputs', /./), config: CONFIG, lang: j.lang || 'zh-TW', quality: qualityOf(j), ...vars };
@@ -101,7 +101,7 @@ export function fail(id: string, stageName: Stage, res: TurnResult) {
   const d = res.detail || '';
   const error = {
     aborted: () => L(id, CANCELLED.zh, CANCELLED.en),
-    limit: () => L(id, `AI 帳號的用量到上限了，等額度恢復或換另一個 AI 導演再按「重試這一步」。原始訊息：${d}`, `Your AI account hit its usage limit. Wait until it resets (or switch to the other AI director), then click “Retry this step”. Message: ${d}`),
+    limit: () => L(id, `AI 服務商回報用量、額度或速率限制。等在途請求完成、補充額度，或換另一個 AI 導演，再從這裡繼續；已完成的檔案會保留。原始訊息：${d}`, `The AI provider reported a usage, credit, or rate limit. Wait for in-flight requests to settle, add credits if needed, or switch provider/model, then retry from here. Existing files are kept. Message: ${d}`),
     missing: () => L(id, `缺少輸出：${(res.missing || []).join(', ')}`, `Missing output: ${(res.missing || []).join(', ')}`),
     invalid: () => L(id, `agent 寫的檔案格式不對（已請它重寫一次）：${d}`, `The agent's files don't follow the contract (it was asked to rewrite them once): ${d}`),
     crashed: () => L(id, `agent 回合失敗${d ? '：' + d : ''}`, `The agent turn failed${d ? ': ' + d : ''}`),
