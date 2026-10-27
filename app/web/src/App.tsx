@@ -138,7 +138,7 @@ function Composer({ agents }: { agents?: Partial<AgentStatus> }) {
         )}
         <input ref={pick} type="file" accept="video/*" hidden onChange={(e) => setVideo(e.target.files![0])} />
         <AutoText minRows={3} placeholder="你想做什麼樣的影片？主題、長度、角色、想保留參考片的哪些地方…" value={brief} onChange={(e) => setBrief(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(); }} />
+          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
         <div className="comp-bar">
           {file && <button className="tool-chip" onClick={() => pick.current!.click()}><I n="retry" />換影片</button>}
           {file && <button className="tool-chip" onClick={() => setFile(null)}><I n="x" />移除</button>}
