@@ -118,7 +118,7 @@ function put(dir: string, f: string, v: unknown) {
   writeFileSync(p, typeof v === 'string' ? v : JSON.stringify(v));
 }
 
-mock.module('./agents/index.ts', { namedExports: { runAgent: fakeAgent, agentStatus: () => ({ claude: 'fake', codex: null }) } });
+mock.module('./agents/index.ts', { namedExports: { runAgent: fakeAgent, agentStatus: () => ({ claude: 'fake', codex: null, opencode: null }) } });
 const J = await import('./jobs.ts');
 
 // ---------- helpers ----------

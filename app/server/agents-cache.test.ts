@@ -15,7 +15,7 @@ function detector(answer: (call: number) => AgentStatus) {
 const tick = () => new Promise((r) => setImmediate(r));
 
 test('reuses the detection inside the ttl', async () => {
-  const c = clock(), d = detector((n) => ({ claude: `v${n}`, codex: 'codex 1' }));
+  const c = clock(), d = detector((n) => ({ claude: `v${n}`, codex: 'codex 1', opencode: 'opencode 1' }));
   const status = createAgentCache(d.detect, 1000, c.now);
   assert.equal((await status()).claude, 'v1');
   c.advance(999);
@@ -24,7 +24,7 @@ test('reuses the detection inside the ttl', async () => {
 });
 
 test('a stale answer is served at once and refreshed in the background', async () => {
-  const c = clock(), d = detector((n) => ({ claude: `v${n}`, codex: 'codex 1' }));
+  const c = clock(), d = detector((n) => ({ claude: `v${n}`, codex: 'codex 1', opencode: 'opencode 1' }));
   const status = createAgentCache(d.detect, 1000, c.now);
   await status();
   c.advance(1000);
@@ -35,7 +35,7 @@ test('a stale answer is served at once and refreshed in the background', async (
 });
 
 test('a missing agent is re-checked sooner, so a new install shows up without a restart', async () => {
-  const c = clock(), d = detector((n) => ({ claude: 'claude 1', codex: n > 1 ? 'codex 1' : null }));
+  const c = clock(), d = detector((n) => ({ claude: 'claude 1', codex: n > 1 ? 'codex 1' : null, opencode: 'opencode 1' }));
   const status = createAgentCache(d.detect, DEFAULT_TTL_MS, c.now);
   assert.equal((await status()).codex, null);
   c.advance(MISS_TTL_MS);
@@ -45,21 +45,21 @@ test('a missing agent is re-checked sooner, so a new install shows up without a 
 });
 
 test('refresh waits for a new probe', async () => {
-  const c = clock(), d = detector((n) => ({ claude: null, codex: n > 1 ? 'codex 1' : null }));
+  const c = clock(), d = detector((n) => ({ claude: null, codex: n > 1 ? 'codex 1' : null, opencode: null }));
   const status = createAgentCache(d.detect, DEFAULT_TTL_MS, c.now);
   await status();
   assert.equal((await status(true)).codex, 'codex 1');
 });
 
 test('concurrent requests share one probe', async () => {
-  const d = detector(() => ({ claude: 'claude 1', codex: null }));
+  const d = detector(() => ({ claude: 'claude 1', codex: null, opencode: null }));
   const status = createAgentCache(d.detect, 1000, clock().now);
   await Promise.all([status(), status(), status(true)]);
   assert.equal(d.calls, 1);
 });
 
 test('a ttl of zero disables the cache', async () => {
-  const d = detector(() => ({ claude: null, codex: null }));
+  const d = detector(() => ({ claude: null, codex: null, opencode: null }));
   const status = createAgentCache(d.detect, 0, () => 0);
   await status();
   await status();
