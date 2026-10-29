@@ -29,18 +29,21 @@ type FileUrl = (p: string) => string;
 type Zoom = (src: string) => void;
 export function Project({ id }: { id: string }) {
   const [s, setS] = useState<SnapshotView | null>(null), [v, setV] = useState(0), [tag, setTag] = useState<Tag | null>(null), [zoom, setZoom] = useState<string | null>(null), [tab, setTab] = useState<string | null>(null);
-  const lastStage = useRef<Stage | null>(null);
+  const lastStage = useRef<Stage | null>(null), [fail, setFail] = useState<Fail | null>(null), [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | undefined, alive = true;
-    const load = () => api.project(id).then((d) => { if (alive) { setS(d as SnapshotView); setV((x) => x + 1); } }).catch(() => {});
+    // a failure only shows before the first snapshot: after that the page keeps what it has, and the stream's reconnect reloads it
+    const load = () => api.project(id).then((d) => { if (alive) { setS(d as SnapshotView); setFail(null); setV((x) => x + 1); } })
+      .catch((e: Error & { status?: number }) => { if (alive) setFail({ missing: e.status === 404, msg: e instanceof TypeError ? '' : e.message }); });
     load();
     // also reload when the stream (re)opens: whatever changed while it was down (a restart marking the job interrupted) arrives no other way
     const soon = () => { clearTimeout(t); t = setTimeout(load, 350); };
     const off = api.events(id, soon, soon);
     return () => { alive = false; off(); clearTimeout(t); };
-  }, [id]);
+  }, [id, attempt]);
   useEffect(() => { const k = (e: KeyboardEvent) => e.key === 'Escape' && setZoom(null); addEventListener('keydown', k); return () => removeEventListener('keydown', k); }, []);
   useEffect(() => { if (s && lastStage.current && lastStage.current !== s.job.stage) setTab(null); if (s) lastStage.current = s.job.stage; }, [s?.job.stage]);
+  if (!s && fail) return <main className="page"><NotLoaded fail={fail} retry={() => { setFail(null); setAttempt((n) => n + 1); }} /></main>;
   if (!s) return <main className="page"><div className="skeleton" style={{ height: 44, width: 320, marginBottom: 24 }} /><div className="proj"><div className="skeleton" style={{ height: 420 }} /><div className="skeleton" style={{ height: 560 }} /></div></main>;
   const { job } = s, idx = stepIdx(job), working = !!STAGE_DO[job.stage];
   const file = (p: string) => api.file(id, p, v);
@@ -315,6 +318,26 @@ function Approve({ id, open }: { id: string; open: RequiredInput[] }) {
         <div className="small muted">{err || (open.length ? `請先提供或略過：${open.map((r) => r.label || r.id).join('、')}` : '有意見就在右邊說，AI 改完再給你看；核准後才開始生成。')}</div></div>
       {open.length > 0 && <button className="btn" onClick={() => document.getElementById('required-inputs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><I n="up" />去提供</button>}
       <button className="btn primary lg" disabled={open.length > 0 || busy} onClick={go}>{busy ? <span className="spin-ring" /> : <I n="play" />}核准並開始生成</button>
+    </div>
+  );
+}
+
+// ---------- the project didn't load: say why instead of showing the skeleton forever ----------
+// missing: the server answered 404 (deleted project, mistyped or old link). Otherwise the server is down or failed;
+// the event stream keeps reconnecting and reloads the page once the server is back, the button just doesn't wait.
+type Fail = { missing: boolean; msg: string };
+function NotLoaded({ fail, retry }: { fail: Fail; retry: () => void }) {
+  return (
+    <div className={`banner ${fail.missing ? 'warn' : 'bad'} fade-in`}>
+      <div className="b-ico"><I n="alert" s={2.2} /></div>
+      <div className="grow">
+        <h3>{fail.missing ? '找不到這個專案' : '專案載入失敗'}</h3>
+        <div className="small muted">{fail.missing ? '它可能已經刪除了，或是連結打錯了。' : fail.msg || '連不到伺服器，確認它還在執行。伺服器回來後這頁會自己重新載入。'}</div>
+        <div className="row" style={{ marginTop: 12 }}>
+          {!fail.missing && <button className="btn sm primary" onClick={retry}><I n="play" />再試一次</button>}
+          <a className="btn sm plain" href="#/">回到首頁</a>
+        </div>
+      </div>
     </div>
   );
 }

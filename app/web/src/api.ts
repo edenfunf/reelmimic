@@ -2,7 +2,7 @@
 import type { AgentStatus, Config, ProjectSummary, Quality, RoundKey, ServerEvent, Snapshot } from '../../shared/types.ts';
 import type { MessageMeta } from './types.ts';
 type Ok = { ok: true };
-const j = async <T>(r: Response): Promise<T> => { const d: unknown = await r.json().catch(() => ({})); if (!r.ok) throw new Error((d as { error?: string }).error || r.statusText); return d as T; };
+const j = async <T>(r: Response): Promise<T> => { const d: unknown = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error((d as { error?: string }).error || r.statusText), { status: r.status }); return d as T; };
 export const api = {
   agents: (refresh = false) => fetch(refresh ? '/api/agents?refresh=1' : '/api/agents').then(j<AgentStatus>),
   projects: () => fetch('/api/projects').then(j<ProjectSummary[]>),

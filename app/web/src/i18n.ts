@@ -90,6 +90,8 @@ const EN: Record<string, string> = {
   '已處理，繼續生產': 'Done — continue production', '繼續生產': 'Continue production',
   '審查員還看到下面這些問題。你可以讓導演照著全部修，或覺得已經夠好就直接開始做鏡頭。': 'The reviewers still see the issues below. Have the director fix them all, or start the shots if it is good enough.',
   '從這裡繼續': 'Continue from here', '再試一次': 'Try again', '技術細節': 'Technical details',
+  '找不到這個專案': 'Project not found', '專案載入失敗': 'Couldn’t load the project', '它可能已經刪除了，或是連結打錯了。': 'It may have been deleted, or the link is wrong.', '回到首頁': 'Back to projects',
+  '連不到伺服器，確認它還在執行。伺服器回來後這頁會自己重新載入。': 'Can’t reach the server. Make sure it’s still running; this page reloads by itself once it’s back.',
   '檔案保留在停下來的地方，可以從這裡繼續。': 'Files are kept where it stopped; you can continue from here.',
   '做到一半的檔案都還在，繼續會從目前的檔案接著做。': 'Work in progress is kept; continuing picks up from the current files.',
   'AI 這一輪出錯了。可以再跑一次，或在右邊說明要怎麼處理。': 'This AI turn failed. Run it again, or explain on the right how to handle it.',
