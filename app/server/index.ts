@@ -27,7 +27,12 @@ const guard = (res: Response, id: string) => { if (!/^[\w-]+$/.test(id) || !exis
 // Answers as soon as the server is listening: start.bat / start.sh poll it before opening the browser
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 const agents = createAgentCache();
-app.get('/api/agents', async (req, res) => { res.json(await agents(req.query.refresh === '1')); });
+app.get('/api/agents', async (req, res) => {
+  // ?refresh=1 waits on a fresh probe; a rejection here had no handler at all (Express 4 does not
+  // catch async errors), and Node's default unhandled-rejection policy can take the process down.
+  try { res.json(await agents(req.query.refresh === '1')); }
+  catch (e) { res.status(502).json({ error: `agent probe failed (${(e as Error).message})` }); }
+});
 app.get('/api/projects', (req, res) => res.json(J.listJobs()));
 
 // New project: a reference (file upload or URL) + brief + agent, optional music / assets / lyrics files.
