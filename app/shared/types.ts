@@ -90,6 +90,7 @@ export interface Job {
   lang: Lang;
   reference: Reference;
   settings: Partial<Rounds>;
+  muted?: boolean;   // no notifications for this project (absent = notify)
   stage: Stage;
   failed?: Stage | null;
   error?: string | null;

@@ -100,6 +100,11 @@ app.post('/api/projects/:id/settings', (req, res) => {
   if (!guard(res, req.params.id)) return;
   try { res.json(J.setRounds(req.params.id, req.body || {})); } catch (e) { res.status(400).json({ error: (e as Error).message }); }
 });
+// Mute / unmute notifications for this project: { muted: true | false }.
+app.post('/api/projects/:id/mute', (req, res) => {
+  if (!guard(res, req.params.id)) return;
+  try { res.json(J.setMuted(req.params.id, req.body?.muted)); } catch (e) { res.status(400).json({ error: (e as Error).message }); }
+});
 app.get('/api/config', (req, res) => res.json(J.CONFIG));
 app.post('/api/projects/:id/retry', act(J.retry));
 app.post('/api/projects/:id/critique', act(J.critique));

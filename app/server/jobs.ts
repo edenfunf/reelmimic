@@ -64,6 +64,13 @@ export function setRounds(id: string, input: Record<string, unknown>) {
   update(id, (x) => { const s = { ...(x.settings || {}) }; for (const [k, v] of Object.entries(clean) as [RoundKey, number | null][]) { if (v == null) delete s[k]; else s[k] = v; } x.settings = s; });
   return snapshot(id);
 }
+// Notifications off for this one project (a test run, a video you're iterating on). Saved like any change, so open pages
+// update through the bus. No chat line: notify.ts falls back to the latest system line as the "needs you" text.
+export function setMuted(id: string, muted: unknown) {
+  if (typeof muted !== 'boolean') throw new Error('muted must be true or false');
+  update(id, (x) => { if (muted) x.muted = true; else delete x.muted; });
+  return snapshot(id);
+}
 
 export type BusEvent = { type: 'job'; job: Job } | { type: 'log'; ev: LogEvent };
 export const bus = new EventEmitter<{ job: [id: string, ev: BusEvent] }>(); bus.setMaxListeners(100);

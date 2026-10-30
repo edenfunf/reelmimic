@@ -38,6 +38,8 @@ const P = {
   music: 'M9 18.5V6.5l10-2v12M9 18.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0ZM19 16.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Z',
   mag: 'M10.5 4.5a6 6 0 1 1 0 12 6 6 0 0 1 0-12ZM15 15l5 5M8 10.5h5',
   stop: 'M7 7h10v10H7z',
+  bell: 'M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5zM10 20.5h4',
+  bellOff: 'M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5zM10 20.5h4M4 4l16 16',
 };
 export type IconName = keyof typeof P;
 export const I = ({ n, s, style, className = '' }: { n: IconName; s?: number; style?: CSSProperties; className?: string }) => (

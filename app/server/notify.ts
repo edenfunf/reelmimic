@@ -43,6 +43,7 @@ async function post(url: string, init: RequestInit, what: string) {
 }
 
 export async function send(job: Job, event: NotifyEvent) {
+  if (job.muted) return;   // muted from the project page; startNotifier still tracks the stage, so unmuting replays nothing
   const title = titleOf(job), text = messageOf(job, event, title), url = linkOf(job.id), work = [];
   const video = join(J.dirOf(job.id), 'out', 'video.mp4');
   const size = event === 'done' ? await stat(video).then((s) => s.size, () => Infinity) : Infinity;
