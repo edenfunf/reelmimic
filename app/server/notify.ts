@@ -2,12 +2,15 @@
 //   DISCORD_WEBHOOK_URL  a Discord channel webhook; the finished video is attached when it fits Discord's upload limit
 //   TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID  a bot from @BotFather messages that chat; the finished video is sent when it fits
 //                        (npm run doctor finds the chat id once you've sent the bot a message)
-//   WEBHOOK_URL          any URL; gets a JSON POST { event, id, title, stage, message, url } (Slack, n8n, Zapier, your own bot…)
+//   WEBHOOK_URL          any URL; gets a JSON POST { event, id, title, stage, message, text, url, lang, needs, error }
+//                        (`text` is what a Slack incoming webhook shows; n8n, Zapier or your own bot can use the rest)
+//   WEBHOOK_SECRET       optional: sign each webhook request so the receiver can check it came from here (see webhookSignature)
 //   REELMIMIC_URL        base of the links in messages (default http://localhost:<PORT>)
 // Only stage changes notify, once each; stages already reached before the server started are never re-sent.
 import { readFileSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createHmac } from 'node:crypto';
 import type { Job, Plan, Stage } from '../shared/types.ts';
 import * as J from './jobs.ts';
 
@@ -42,6 +45,24 @@ async function post(url: string, init: RequestInit, what: string) {
   } catch (e) { console.error(`notify: ${what} failed: ${(e as Error).message}`); return false; }
 }
 
+// What WEBHOOK_URL receives. `message` is the plain text without the link; `text` adds it (Slack needs a `text` field).
+export function webhookBody(job: Job, event: NotifyEvent, title: string, message: string, url: string) {
+  return {
+    event, id: job.id, title, stage: job.stage, message, text: `${message}\n${url}`, url, lang: job.lang,
+    needs: (job.needs || []).map((n) => n.issue), error: event === 'error' ? job.error || '' : null,
+  };
+}
+
+// With WEBHOOK_SECRET: X-ReelMimic-Timestamp (unix seconds) and X-ReelMimic-Signature: sha256=hex(HMAC-SHA256(secret, `${timestamp}.${body}`)).
+// The receiver recomputes it over the raw body, compares in constant time, and can refuse old timestamps (replays).
+export const webhookSignature = (secret: string, timestamp: number, body: string) => `sha256=${createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')}`;
+function webhookHeaders(body: string): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }, secret = process.env.WEBHOOK_SECRET;
+  if (!secret) return headers;
+  const ts = Math.floor(Date.now() / 1000);
+  return { ...headers, 'X-ReelMimic-Timestamp': String(ts), 'X-ReelMimic-Signature': webhookSignature(secret, ts, body) };
+}
+
 export async function send(job: Job, event: NotifyEvent) {
   const title = titleOf(job), text = messageOf(job, event, title), url = linkOf(job.id), work = [];
   const video = join(J.dirOf(job.id), 'out', 'video.mp4');
@@ -68,7 +89,10 @@ export async function send(job: Job, event: NotifyEvent) {
       work.push(post(telegram('sendVideo'), { body: form }, 'Telegram video').then((ok) => ok || sendText()));
     } else work.push(sendText());
   }
-  if (process.env.WEBHOOK_URL) work.push(post(process.env.WEBHOOK_URL, { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event, id: job.id, title, stage: job.stage, message: text, url }) }, 'webhook'));
+  if (process.env.WEBHOOK_URL) {
+    const body = JSON.stringify(webhookBody(job, event, title, text, url));
+    work.push(post(process.env.WEBHOOK_URL, { headers: webhookHeaders(body), body }, 'webhook'));
+  }
   await Promise.all(work);
 }
 

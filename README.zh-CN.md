@@ -117,7 +117,8 @@ Claude Code 会自己读到 repo 里的 skills，Codex 会读 `AGENTS.md`，不�
 | `CODEX_SANDBOX` | Codex 的沙盒模式（默认 `danger-full-access`，和 Claude Code 允许 Bash 时一样；`workspace-write` 会让 Chrome 渲染跑不起来） |
 | `BUILDERS`、`MAX_AGENTS` | 一支片同时几个 AI 在做（默认 6）、所有项目加起来最多几个（默认 12） |
 | `PORT` | 网站用的端口（默认 4318） |
-| `DISCORD_WEBHOOK_URL`、`WEBHOOK_URL` | 企划好了、需要你处理、视频完成（Discord 会附上视频）或出错时发消息给你。`WEBHOOK_URL` 会收到 JSON：`{ event, id, title, stage, message, url }` |
+| `DISCORD_WEBHOOK_URL`、`WEBHOOK_URL` | 企划好了、需要你处理、视频完成（Discord 会附上视频）或出错时发消息给你。`WEBHOOK_URL` 会收到 JSON：`{ event, id, title, stage, message, text, url, lang, needs, error }`，Slack 的 incoming webhook 可以直接用 |
+| `WEBHOOK_SECRET` | 选填：每个 webhook request 都带签名（`X-ReelMimic-Timestamp`，以及 `X-ReelMimic-Signature: sha256=` 对 `timestamp.body` 做的 HMAC），接收端可以验证来源 |
 | `TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID` | 同样的通知改由 Telegram 机器人发（视频小于 50 MB 会直接发过去）。找 [@BotFather](https://t.me/BotFather) 建一个 bot 拿到 token，给它发任意一句话，再跑 `npm run doctor` 就会显示你的 chat id |
 | `REELMIMIC_URL` | 消息里链接的网址开头（默认 `http://localhost:4318`） |
 

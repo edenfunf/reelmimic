@@ -131,7 +131,8 @@ committed. See [`secrets.example.json`](secrets.example.json) for the format.
 | `CODEX_SANDBOX` | Codex sandbox mode (default `danger-full-access`, like Claude Code with Bash allowed; `workspace-write` blocks the Chrome renderer) |
 | `BUILDERS`, `MAX_AGENTS` | How many agents work on one video at once (default 6), and the limit across all projects (default 12) |
 | `PORT` | Web port (default 4318) |
-| `DISCORD_WEBHOOK_URL`, `WEBHOOK_URL` | Get a message when a plan is ready, when a video needs you, is done (video attached on Discord) or stops with an error. `WEBHOOK_URL` gets a JSON POST: `{ event, id, title, stage, message, url }` |
+| `DISCORD_WEBHOOK_URL`, `WEBHOOK_URL` | Get a message when a plan is ready, when a video needs you, is done (video attached on Discord) or stops with an error. `WEBHOOK_URL` gets a JSON POST: `{ event, id, title, stage, message, text, url, lang, needs, error }`, which a Slack incoming webhook takes as is |
+| `WEBHOOK_SECRET` | Optional: signs each webhook request (`X-ReelMimic-Timestamp`, and `X-ReelMimic-Signature: sha256=` an HMAC of `timestamp.body`) so your receiver can check it |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | The same messages from a Telegram bot (the video is sent when it's under 50 MB). Create a bot with [@BotFather](https://t.me/BotFather) for the token, send it any message, then `npm run doctor` shows your chat id |
 | `REELMIMIC_URL` | Base of the links in those messages (default `http://localhost:4318`) |
 
