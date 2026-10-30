@@ -133,6 +133,7 @@ committed. See [`secrets.example.json`](secrets.example.json) for the format.
 | `PORT` | Web port (default 4318) |
 | `DISCORD_WEBHOOK_URL`, `WEBHOOK_URL` | Get a message when a plan is ready, when a video needs you, is done (video attached on Discord) or stops with an error. `WEBHOOK_URL` gets a JSON POST: `{ event, id, title, stage, message, url }` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | The same messages from a Telegram bot (the video is sent when it's under 50 MB). Create a bot with [@BotFather](https://t.me/BotFather) for the token, send it any message, then `npm run doctor` shows your chat id |
+| `NTFY_URL`, `NTFY_TOKEN` | The same messages as phone pushes from [ntfy](https://ntfy.sh), no bot needed: pick a hard-to-guess topic, subscribe to it in the ntfy app and set the full topic URL (e.g. `https://ntfy.sh/my-reelmimic-topic`, or your own server). The video is attached when it's under `NTFY_ATTACH_MB` (default 15). `NTFY_TOKEN` is for protected topics |
 | `REELMIMIC_URL` | Base of the links in those messages (default `http://localhost:4318`) |
 
 ## Docs

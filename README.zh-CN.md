@@ -119,6 +119,7 @@ Claude Code 会自己读到 repo 里的 skills，Codex 会读 `AGENTS.md`，不�
 | `PORT` | 网站用的端口（默认 4318） |
 | `DISCORD_WEBHOOK_URL`、`WEBHOOK_URL` | 企划好了、需要你处理、视频完成（Discord 会附上视频）或出错时发消息给你。`WEBHOOK_URL` 会收到 JSON：`{ event, id, title, stage, message, url }` |
 | `TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID` | 同样的通知改由 Telegram 机器人发（视频小于 50 MB 会直接发过去）。找 [@BotFather](https://t.me/BotFather) 建一个 bot 拿到 token，给它发任意一句话，再跑 `npm run doctor` 就会显示你的 chat id |
+| `NTFY_URL`、`NTFY_TOKEN` | 同样的通知改用 [ntfy](https://ntfy.sh) 推到手机，不用建 bot：取一个别人猜不到的主题名，在 ntfy App 订阅，再填完整的主题网址（例如 `https://ntfy.sh/my-reelmimic-topic`，自建的服务器也可以）。视频小于 `NTFY_ATTACH_MB`（默认 15）会附上。受保护的主题才需要 `NTFY_TOKEN` |
 | `REELMIMIC_URL` | 消息里链接的网址开头（默认 `http://localhost:4318`） |
 
 ## 文档

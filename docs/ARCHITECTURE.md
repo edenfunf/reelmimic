@@ -17,7 +17,7 @@ Server (app/server)
    ├─ env.ts            loads ~/.reelmimic/secrets.json at startup
    ├─ jobs.ts           workflow state machine + production scheduling (order, parallelism, pausing)
    ├─ prompts.ts        the instructions each step gives its agent (edits apply on the next turn, no restart)
-   ├─ notify.ts         Discord / Telegram / webhook messages when a video needs you or is done
+   ├─ notify.ts         Discord / Telegram / ntfy / webhook messages when a video needs you or is done
    └─ agents/index.ts   agent adapters: Claude Code / Codex → one event stream
    │  spawn (prompt on stdin, events streamed on stdout)
    ▼

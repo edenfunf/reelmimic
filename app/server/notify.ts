@@ -1,5 +1,6 @@
-// Notifications: when a video needs you or is done, post to Discord, Telegram and/or any webhook, so you don't have to keep the page open.
+// Notifications: when a video needs you or is done, post to Discord, Telegram, ntfy and/or any webhook, so you don't have to keep the page open.
 //   DISCORD_WEBHOOK_URL  a Discord channel webhook; the finished video is attached when it fits Discord's upload limit
+//   NTFY_URL (+ NTFY_TOKEN)  an ntfy topic (ntfy.sh or self-hosted) for phone pushes without a bot; see notify-ntfy.ts
 //   TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID  a bot from @BotFather messages that chat; the finished video is sent when it fits
 //                        (npm run doctor finds the chat id once you've sent the bot a message)
 //   WEBHOOK_URL          any URL; gets a JSON POST { event, id, title, stage, message, url } (Slack, n8n, Zapier, your own bot…)
@@ -10,6 +11,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Job, Plan, Stage } from '../shared/types.ts';
 import * as J from './jobs.ts';
+import { sendNtfy } from './notify-ntfy.ts';
 
 export type NotifyEvent = 'plan_ready' | 'needs_input' | 'done' | 'error';
 const EVENT: Partial<Record<Stage, NotifyEvent>> = { plan_review: 'plan_ready', needs_input: 'needs_input', done: 'done', error: 'error' };
@@ -57,6 +59,7 @@ export async function send(job: Job, event: NotifyEvent) {
       work.push(post(process.env.DISCORD_WEBHOOK_URL, { body: form }, 'Discord'));
     } else work.push(post(process.env.DISCORD_WEBHOOK_URL, { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }, 'Discord'));
   }
+  if (process.env.NTFY_URL) work.push(sendNtfy({ event, title, text, url, size, video: videoBlob }));
   if (telegramOn()) {   // plain text (no parse_mode), so titles and errors need no escaping
     const chat = process.env.TELEGRAM_CHAT_ID!, msg = `${text}\n${url}`;
     const sendText = () => post(telegram('sendMessage'), { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chat, text: msg.slice(0, 4096), link_preview_options: { is_disabled: true } }) }, 'Telegram');
@@ -74,7 +77,7 @@ export async function send(job: Job, event: NotifyEvent) {
 
 // Watches every job's stage from now on. Returns a stop function (tests), or null when nothing is configured.
 export function startNotifier() {
-  if (!process.env.DISCORD_WEBHOOK_URL && !process.env.WEBHOOK_URL && !telegramOn()) return null;
+  if (!process.env.DISCORD_WEBHOOK_URL && !process.env.WEBHOOK_URL && !process.env.NTFY_URL && !telegramOn()) return null;
   const last = new Map(J.listJobs().map((j) => [j.id, j.stage]));
   const onJob = (id: string, ev: J.BusEvent) => {
     if (ev.type !== 'job') return;
