@@ -8,16 +8,27 @@
 import { readFileSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Job, Plan, Stage } from '../shared/types.ts';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import type { Job, NotifyEvent, NotifyMarker, Plan, Stage } from '../shared/types.ts';
 import * as J from './jobs.ts';
 
-export type NotifyEvent = 'plan_ready' | 'needs_input' | 'done' | 'error';
+export type { NotifyEvent };
 const EVENT: Partial<Record<Stage, NotifyEvent>> = { plan_review: 'plan_ready', needs_input: 'needs_input', done: 'done', error: 'error' };
 const DISCORD_FILE_LIMIT = 10 * 1024 ** 2;   // webhook uploads on a server without boosts
 const TELEGRAM_FILE_LIMIT = 50 * 1024 ** 2;  // Bot API uploads
 const telegramOn = () => !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID);
 // TELEGRAM_API: only for tests. The token is part of the URL, so post() never logs URLs.
 const telegram = (method: string) => `${(process.env.TELEGRAM_API || 'https://api.telegram.org').replace(/\/$/, '')}/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`;
+
+// What each post() did, collected by sendLogged() so the project log shows a channel that keeps failing.
+// fetch's own message is just "fetch failed"; the cause says why (ECONNREFUSED…). Either can quote the URL (even a
+// malformed one, "Failed to parse URL from …"), and URLs carry the Telegram token and Discord's webhook secret: cut them out.
+type Sent = Pick<NotifyMarker, 'channel' | 'ok' | 'detail'>;
+const sent = new AsyncLocalStorage<Sent[]>();
+const record = (url: string, channel: string, ok: boolean, why: string | Error) => {
+  const detail = typeof why === 'string' ? why.trim() : [why.message, (why.cause as Error | undefined)?.message].filter(Boolean).join(': ');
+  sent.getStore()?.push({ channel, ok, ...(!ok && { detail: detail.replaceAll(url, '…').replace(/\w+:\/\/\S+/g, '…').slice(0, 200) }) });
+};
 
 const titleOf = (job: Job) => { try { return (JSON.parse(readFileSync(join(J.dirOf(job.id), 'plan.json'), 'utf8')) as Plan).title || job.title; } catch { return job.title; } };
 export const linkOf = (id: string) => `${(process.env.REELMIMIC_URL || `http://localhost:${process.env.PORT || 4318}`).replace(/\/$/, '')}/#/p/${id}`;
@@ -38,8 +49,9 @@ async function post(url: string, init: RequestInit, what: string) {
   try {
     const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(60000), ...init });
     if (!r.ok) console.error(`notify: ${what} answered ${r.status} ${(await r.text()).slice(0, 200)}`);
+    record(url, what, r.ok, `${r.status} ${r.statusText}`);   // status only: a webhook's reply body could echo anything
     return r.ok;
-  } catch (e) { console.error(`notify: ${what} failed: ${(e as Error).message}`); return false; }
+  } catch (e) { console.error(`notify: ${what} failed: ${(e as Error).message}`); record(url, what, false, e as Error); return false; }
 }
 
 export async function send(job: Job, event: NotifyEvent) {
@@ -72,6 +84,13 @@ export async function send(job: Job, event: NotifyEvent) {
   await Promise.all(work);
 }
 
+// send(), plus one log entry per channel tried. A failure inside send() itself still throws to the caller.
+export async function sendLogged(job: Job, event: NotifyEvent) {
+  const results: Sent[] = [];
+  try { await sent.run(results, () => send(job, event)); }
+  finally { for (const r of results) J.log(job.id, { type: 'notify', event, ...r }); }
+}
+
 // Watches every job's stage from now on. Returns a stop function (tests), or null when nothing is configured.
 export function startNotifier() {
   if (!process.env.DISCORD_WEBHOOK_URL && !process.env.WEBHOOK_URL && !telegramOn()) return null;
@@ -82,7 +101,7 @@ export function startNotifier() {
     last.set(id, stage);
     // a cancel is the user's own doing: no message for it
     if (prev === stage || !event || (stage === 'error' && Object.values(J.CANCELLED).includes(ev.job.error || ''))) return;
-    send(ev.job, event).catch((e) => console.error('notify:', e));
+    sendLogged(ev.job, event).catch((e) => console.error('notify:', e));
   };
   J.bus.on('job', onJob);
   return () => { J.bus.off('job', onJob); };
