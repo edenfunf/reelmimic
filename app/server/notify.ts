@@ -21,6 +21,7 @@ const telegram = (method: string) => `${(process.env.TELEGRAM_API || 'https://ap
 
 const titleOf = (job: Job) => { try { return (JSON.parse(readFileSync(join(J.dirOf(job.id), 'plan.json'), 'utf8')) as Plan).title || job.title; } catch { return job.title; } };
 export const linkOf = (id: string) => `${(process.env.REELMIMIC_URL || `http://localhost:${process.env.PORT || 4318}`).replace(/\/$/, '')}/#/p/${id}`;
+export { telegram, telegramOn };   // telegram-commands.ts answers through the same bot
 
 // The message in the project's language (Simplified Chinese projects get the Traditional text, as elsewhere on the server).
 export function messageOf(job: Job, event: NotifyEvent, title = titleOf(job)): string {
