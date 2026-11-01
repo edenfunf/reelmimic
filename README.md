@@ -133,6 +133,7 @@ committed. See [`secrets.example.json`](secrets.example.json) for the format.
 | `PORT` | Web port (default 4318) |
 | `DISCORD_WEBHOOK_URL`, `WEBHOOK_URL` | Get a message when a plan is ready, when a video needs you, is done (video attached on Discord) or stops with an error. `WEBHOOK_URL` gets a JSON POST: `{ event, id, title, stage, message, url }` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | The same messages from a Telegram bot (the video is sent when it's under 50 MB). Create a bot with [@BotFather](https://t.me/BotFather) for the token, send it any message, then `npm run doctor` shows your chat id |
+| `TELEGRAM_COMMANDS` | Set to `1` to also ask that bot how things are going: `/list` shows the latest projects, `/status 2` (or part of a title) one project's stage, what it needs from you, any error and its link. Only your chat gets answers, and the bot only reads, it never changes a project. Uses long polling, so it doesn't work while the bot has a webhook set |
 | `REELMIMIC_URL` | Base of the links in those messages (default `http://localhost:4318`) |
 
 ## Docs

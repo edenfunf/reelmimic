@@ -119,6 +119,7 @@ Claude Code 會自己讀到 repo 裡的 skills，Codex 會讀 `AGENTS.md`，不�
 | `PORT` | 網站用的埠號（預設 4318） |
 | `DISCORD_WEBHOOK_URL`、`WEBHOOK_URL` | 企劃好了、需要你處理、影片完成（Discord 會附上影片）或出錯時傳訊息給你。`WEBHOOK_URL` 會收到 JSON：`{ event, id, title, stage, message, url }` |
 | `TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID` | 同樣的通知改由 Telegram 機器人傳（影片小於 50 MB 會直接傳過去）。跟 [@BotFather](https://t.me/BotFather) 建一個 bot 拿到 token，傳任何一句話給它，再跑 `npm run doctor` 就會顯示你的 chat id |
+| `TELEGRAM_COMMANDS` | 設成 `1` 就能反過來問機器人進度：`/list` 列出最近的專案，`/status 2`（或標題的一部分）看某個專案的階段、需要你給什麼、錯誤訊息和連結。只回你的 chat，而且只會回報、不會改動專案。用的是 long polling，bot 設了 webhook 就不能用 |
 | `REELMIMIC_URL` | 訊息裡連結的網址開頭（預設 `http://localhost:4318`） |
 
 ## 文件

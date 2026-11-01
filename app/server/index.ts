@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
 import { join, extname, resolve, sep } from 'node:path';
 import type { AgentStatus } from '../shared/types.ts';
 import { agentStatus } from './agents/index.ts';
+import { startCommands } from './telegram-commands.ts';
 import * as J from './jobs.ts';
 import { startNotifier } from './notify.ts';
 // Ctrl+C / kill: stop the agents first (the next start marks their turns interrupted, and Retry resumes them)
@@ -129,4 +130,5 @@ if (existsSync(dist)) { app.use(express.static(dist)); app.get(/^\/(?!api|files)
 
 J.recoverOrphans();
 if (startNotifier()) console.log('Notifications on');
+if (startCommands()) console.log('Telegram commands on (/list, /status)');
 app.listen(PORT, '127.0.0.1', () => console.log(`ReelMimic → http://localhost:${PORT}`));
