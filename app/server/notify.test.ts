@@ -45,7 +45,7 @@ test('plan ready: one Discord message and one webhook call, with the plan title 
   const discord = JSON.parse(hits.find((h) => h.path === '/discord')!.body), hook = JSON.parse(hits.find((h) => h.path === '/hook')!.body);
   assert.match(discord.content, /The plan for "Lantern Walk" is ready/);
   assert.match(discord.content, /https:\/\/studio\.example\/#\/p\/p1$/);
-  assert.deepEqual({ ...hook, message: undefined }, { event: 'plan_ready', id: 'p1', title: 'Lantern Walk', stage: 'plan_review', message: undefined, url: 'https://studio.example/#/p/p1' });
+  assert.deepEqual({ ...hook, message: undefined, text: undefined }, { event: 'plan_ready', id: 'p1', title: 'Lantern Walk', stage: 'plan_review', message: undefined, text: undefined, url: 'https://studio.example/#/p/p1', lang: 'en', needs: [], error: null });
 });
 
 test('the same stage again sends nothing', async () => {
