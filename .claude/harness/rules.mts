@@ -1,7 +1,7 @@
 // Every project rule, and every place that enforces it. A rule that only lives in a prompt is a wish; this table says
 // which ones are wishes. `sync-rules.mts --check` (CI) keeps it honest in both directions:
 //   - each rule id in CLAUDE.md's shared block has an entry here, and each entry here is a rule there;
-//   - each `at` exists, and its `#anchor` (when given) still appears in that file — so renaming a policy, moving a
+//   - each `at` exists, and its `#anchor` (when given) still appears in that file outside comments — so renaming a policy, moving a
 //     script or deleting the prompt line that carries a rule breaks the build instead of silently dropping the rule;
 //   - each `hook` entry names a policy in policy.mts that declares this rule, and every policy is listed here.
 export type Layer = 'hook' | 'runtime' | 'ci' | 'tool' | 'git' | 'prompt';
@@ -35,8 +35,8 @@ export const ENFORCEMENT: Record<string, Enforcement[]> = {
     { layer: 'runtime', at: 'app/server/prompts.ts#動作只能從連續影格判斷', how: 'reviewers that did not build the shot judge it from consecutive frames, with before/after crops as evidence' },
   ],
   'secrets': [
-    { layer: 'hook', at: '.claude/harness/policy.mts#secrets-write', how: 'writes to any secrets.json are denied (Write/Edit, redirects, cp/mv/sed/…)' },
-    { layer: 'hook', at: '.claude/harness/policy.mts#secrets-read', how: 'reading the real file asks the user first' },
+    { layer: 'hook', at: '.claude/harness/policy.mts#secrets-write', how: 'writes to any secrets.json are denied (Write/Edit, redirects, cp/mv/sed/…, globs and folder-walking tools over it)' },
+    { layer: 'hook', at: '.claude/harness/policy.mts#secrets-read', how: 'reading the real file asks the user first (Read, Grep, cat, globs, grep -r over a folder above it)' },
     { layer: 'git', at: '.gitignore#secrets.json', how: 'never committed' },
   ],
   'projects-private': [

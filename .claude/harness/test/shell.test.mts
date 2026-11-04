@@ -54,6 +54,26 @@ test('here-documents are stdin, not commands; an unquoted one still runs its sub
   assert.deepEqual(argvs('grep x <<< "git add -f projects"'), [['grep', 'x']]);
 });
 
+test('variables expand from the command, then the environment; search lists do not', () => {
+  const home = homedir().replace(/\\/g, '/');
+  assert.deepEqual(argvs('cat $HOME/.k ${HOME}/.k')[0].slice(1).map((a) => a.replace(/\\/g, '/')), [`${home}/.k`, `${home}/.k`]);
+  assert.deepEqual(argvs('D=/tmp/d; ls $D/x "${D}"/y'), [['ls', '/tmp/d/x', '/tmp/d/y']]);
+  assert.deepEqual(argvs('HOME=/elsewhere cat $HOME/f')[0][1].replace(/\\/g, '/'), `${home}/f`, 'a prefix applies to the command, not to its own words');
+  assert.deepEqual(argvs('echo $PATH $NOT_SET_ANYWHERE_X $1'), [['echo', '$PATH', '$NOT_SET_ANYWHERE_X', '$1']]);
+  assert.deepEqual(parse('D=/tmp/d; echo x > $D/out.txt', CWD)[0].redirects, [resolvePath('/tmp/d/out.txt', CWD)]);
+});
+
+test('launchers are unwrapped with their own options', () => {
+  assert.deepEqual(argvs('timeout 600 node a.js'), [['node', 'a.js']]);
+  assert.deepEqual(argvs('timeout -s INT -k 5 10m node a.js'), [['node', 'a.js']]);
+  assert.deepEqual(argvs('sudo -n node a.js'), [['node', 'a.js']], '-n takes no value: the old code ate `node`');
+  assert.deepEqual(argvs('sudo -u bob node a.js'), [['node', 'a.js']]);
+  assert.deepEqual(argvs('npx -y tsx a.ts'), [['tsx', 'a.ts']]);
+  assert.deepEqual(argvs('npx --package tsx tsx a.ts'), [['tsx', 'a.ts']]);
+  assert.deepEqual(argvs('pnpm exec -- tsx a.ts'), [['tsx', 'a.ts']]);
+  assert.deepEqual(argvs('npm test'), [['npm', 'test']]);
+});
+
 test('bash -c is parsed as the commands it runs', () => {
   const L = parse(`bash -c 'cd /tmp && git add x'`, CWD);
   assert.deepEqual(L.map((c) => c.argv), [['bash', '-c', 'cd /tmp && git add x'], ['git', 'add', 'x']]);

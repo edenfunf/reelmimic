@@ -26,6 +26,69 @@ function replaceBlock(text: string, [open, close]: readonly [string, string], bo
   const a = text.indexOf(open), b = text.indexOf(close);
   return text.slice(0, text.indexOf('\n', a) + 1) + body + text.slice(b);
 }
+/** `src` with its comments blanked out, strings kept: an anchor must name live code or text, not a comment that still
+ *  mentions a function after it is gone. JS/TS: `//`, `/* *\/`, with strings, templates and regex literals skipped
+ *  so `'//'` or `/["']/` cannot open a false comment. Python / shell / .gitignore: `#` (shell only at a word start).
+ *  Markdown: `<!-- -->`. Newlines are kept, so nothing joins across a removed comment. */
+export function uncommented(src: string, file: string): string {
+  if (/\.md$/i.test(file)) return src.replace(/<!--[\s\S]*?-->/g, '');
+  if (/\.(?:py|sh)$|(?:^|\/)\.gitignore$/i.test(file)) {
+    const py = /\.py$/i.test(file); let out = '', q = '';
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (q) { out += c; if (c === '\\') out += src[++i] ?? ''; else if (src.startsWith(q, i)) { out += q.slice(1); i += q.length - 1; q = ''; } continue; }
+      if (c === '#' && (py || i === 0 || /\s/.test(src[i - 1]))) { while (i < src.length && src[i] !== '\n') i++; out += '\n'; continue; }
+      if ((c === '"' || c === "'") && !/\.gitignore$/.test(file)) { q = py && src.startsWith(c.repeat(3), i) ? c.repeat(3) : c; out += q; i += q.length - 1; continue; }
+      out += c;
+    }
+    return out;
+  }
+  if (!/\.(?:[cm]?[jt]sx?)$/i.test(file)) return src;
+  let out = '';
+  // Code up to the `}` that closes a template's `${` (when `close`), or to the end. `last` is the last significant
+  // character: after an operator or bracket a `/` starts a regex, after a name or `)` it divides.
+  const code = (i: number, close: boolean): number => {
+    let depth = 0, last = '';
+    for (; i < src.length; i++) {
+      const c = src[i], n = src[i + 1];
+      if (close && c === '{') depth++;
+      else if (close && c === '}' && depth-- === 0) { out += c; return i + 1; }
+      if (c === '/' && n === '/') { while (i < src.length && src[i] !== '\n') i++; out += '\n'; continue; }
+      if (c === '/' && n === '*') { const e = src.indexOf('*/', i + 2), end = e < 0 ? src.length : e + 2; out += src.slice(i, end).replace(/[^\n]/g, ''); i = end - 1; continue; }
+      if (c === '`') { out += c; i = template(i + 1) - 1; last = c; continue; }
+      if (c === '"' || c === "'" || (c === '/' && (!last || /[(,=:[!&|?{};+\-*%<>~^]/.test(last)))) {
+        let j = i + 1, cls = false;
+        for (; j < src.length && src[j] !== '\n'; j++) {
+          if (src[j] === '\\') { j++; continue; }
+          if (c === '/' && src[j] === '[') cls = true; else if (cls && src[j] === ']') cls = false;
+          else if (src[j] === c && !cls) break;
+        }
+        out += src.slice(i, j + 1); i = j; last = c; continue;
+      }
+      out += c; if (!/\s/.test(c)) last = c;
+    }
+    return i;
+  };
+  // A template literal from just after its opening backtick; its `${ … }` parts are code (and may hold templates).
+  const template = (i: number): number => {
+    for (; i < src.length; i++) {
+      if (src[i] === '\\') { out += src.slice(i, i + 2); i++; continue; }
+      if (src[i] === '`') { out += '`'; return i + 1; }
+      if (src[i] === '$' && src[i + 1] === '{') { out += '${'; i = code(i + 2, true) - 1; continue; }
+      out += src[i];
+    }
+    return i;
+  };
+  code(0, false);
+  return out;
+}
+
+/** True when `anchor` appears in `file` outside comments; a bare identifier must appear as a whole word. */
+export function anchored(src: string, file: string, anchor: string): boolean {
+  const code = uncommented(src.replace(/\r\n/g, '\n'), file);
+  return /^[A-Za-z_$][\w$]*$/.test(anchor) ? new RegExp(`(?<![\\w$])${anchor.replace(/\$/g, '\\$')}(?![\\w$])`).test(code) : code.includes(anchor);
+}
+
 export const ruleIds = (shared: string) => shared.split('\n').map((l) => RULE_LINE.exec(l)?.[1]).filter((x): x is string => !!x);
 
 export function renderTable(): string {
@@ -55,7 +118,7 @@ export function problems(): string[] {
   for (const [id, L] of Object.entries(ENFORCEMENT)) for (const e of L) {
     const [file, anchor] = e.at.split('#');
     if (!existsSync(join(ROOT, file))) { P.push(`\`${id}\`: ${file} does not exist`); continue; }
-    if (anchor && !read(file).includes(anchor)) P.push(`\`${id}\`: "${anchor}" no longer appears in ${file}`);
+    if (anchor && !anchored(read(file), file, anchor)) P.push(`\`${id}\`: "${anchor}" no longer appears in ${file} (comments do not count)`);
     if (e.layer === 'hook' && file.endsWith('policy.mts') && !POLICIES.some((p) => p.id === anchor && p.rule === id)) P.push(`\`${id}\`: policy.mts has no policy "${anchor}" for this rule`);
   }
   for (const p of POLICIES) {

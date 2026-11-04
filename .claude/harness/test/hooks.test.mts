@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ROOT } from '../lib/hook.mts';
-import { bin } from '../lib/video.mts';
+import { bin, contactSheet } from '../lib/video.mts';
 
 const TMP = mkdtempSync(join(tmpdir(), 'harness-hooks-'));
 const ENV: NodeJS.ProcessEnv = { ...process.env, REELMIMIC_HARNESS_STATE: join(TMP, 'state'), REELMIMIC_HARNESS_AUDIT: join(TMP, 'audit.jsonl') };
@@ -78,6 +78,22 @@ test('post-tool-use + stop: a film render is sheeted, scanned, and gated until l
   assert.equal(hook('stop', { session_id: S, stop_hook_active: true }), null, 'second stop goes through');
   hook('post-tool-use', { ...base, tool_name: 'Read', tool_input: { file_path: sheet } });
   assert.equal(hook('stop', { session_id: S }), null, 'looked at: free to stop');
+});
+
+test('contact sheets are cached per layout', { skip: !ffmpeg && 'ffmpeg not found' }, async () => {
+  const film = join(TMP, 'proj', 'out', 'video.mp4');
+  if (!existsSync(film)) return;   // made by the film test above
+  const a = await contactSheet(film, 9, 3), b = await contactSheet(film, 9, 9), again = await contactSheet(film, 9, 3);
+  assert.notEqual(a.path, b.path, '9 across is not 3 across');
+  assert.equal(again.path, a.path);
+});
+
+test('pre-tool-use: the Grep tool pointed at the keys asks', () => {
+  const keys = mkdtempSync(join(tmpdir(), 'harness-keys-')); writeFileSync(join(keys, 'secrets.json'), '{}');
+  const out = hook('pre-tool-use', { session_id: 'g', cwd: ROOT, tool_name: 'Grep', tool_input: { pattern: '.', path: keys } }, { ...ENV, REELMIMIC_SECRETS: join(keys, 'secrets.json') });
+  assert.equal(out.hookSpecificOutput.permissionDecision, 'ask');
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /^\[harness:secrets-read\]/);
+  assert.equal(hook('pre-tool-use', { session_id: 'g', cwd: ROOT, tool_name: 'Grep', tool_input: { pattern: 'x', path: join(ROOT, 'app') } }), null);
 });
 
 test('post-tool-use + stop: review images are pending until that file is read', () => {

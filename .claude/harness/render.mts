@@ -4,7 +4,7 @@
 //   check — review images the agent asked for (`render.mjs --sheet|--strip|--stills`, `hf_frames.py`): already the
 //           thing to Read, so the hook only remembers them until they are read.
 // `render.mjs --frames` (frames to disk, encoded later) is neither: the encode that follows is the film.
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { base, resolvePath, type Simple } from './lib/shell.mts';
 import { VIDEO } from './lib/video.mts';
@@ -70,9 +70,11 @@ export function newestVideo(dir: string, f: Freshness = {}): string | null {
   return best ? (best as { p: string }).p.replace(/\\/g, '/') : null;
 }
 
-/** The file this render wrote, if it is there and fresh (a failed render leaves last run's file behind). */
+/** The file this render wrote, if it is there and fresh (a failed render leaves last run's file behind, or nothing).
+ *  Only a render that did not say where it writes is looked for: when it did, a missing or stale file means it failed,
+ *  and the newest video nearby is some other command's. */
 export function freshOutput(r: Render, cwd: string, f: Freshness = {}): string | null {
-  if (r.out && existsSync(r.out)) {
+  if (r.out) {
     try { const st = statSync(r.out); if (st.mtimeMs >= cutoff(f)) return r.out; } catch {}   // a file, or a --stills folder
     return null;
   }

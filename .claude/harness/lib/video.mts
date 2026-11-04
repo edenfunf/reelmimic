@@ -31,7 +31,7 @@ export interface Sheet { path: string; times: number[]; cols: number; duration: 
  *  file + size + mtime, so asking twice for the same render costs nothing. */
 export async function contactSheet(file: string, n = 9, cols = 3, width = 480): Promise<Sheet> {
   const st = statSync(file), dur = await duration(file);
-  const key = createHash('sha1').update(`${file}|${st.size}|${st.mtimeMs}|${n}|${width}`).digest('hex').slice(0, 16);
+  const key = createHash('sha1').update(`${file}|${st.size}|${st.mtimeMs}|${n}|${cols}|${width}`).digest('hex').slice(0, 16);
   const dir = join(tmpdir(), 'reelmimic-harness', 'sheets'); mkdirSync(dir, { recursive: true });
   const path = join(dir, `${key}.jpg`).replace(/\\/g, '/');
   const times = Array.from({ length: n }, (_, k) => +(((k + 0.5) * dur) / n).toFixed(2));

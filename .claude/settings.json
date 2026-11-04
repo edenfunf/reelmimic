@@ -7,7 +7,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|Read",
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|Read|Grep",
         "hooks": [{ "type": "command", "command": "node --disable-warning=ExperimentalWarning \"$CLAUDE_PROJECT_DIR/.claude/harness/hooks/dispatch.mjs\" pre", "timeout": 15 }]
       }
     ],

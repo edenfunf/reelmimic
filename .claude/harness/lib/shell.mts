@@ -1,10 +1,12 @@
 // Reads an agent's shell command the way the shell will run it — enough for policy, not a shell. Splits a command line
 // into simple commands (on ; && || | & newlines, subshells and $( ) / `` substitutions, whose insides run too), honours
 // quotes and escapes, and tracks what changes between them: `cd` / `pushd` / `git -C` move the working directory,
-// `export K=V` and `K=V cmd` set the environment, and `bash -c '…'` / `sh -c` / `env` / `nohup` / `sudo` are unwrapped.
+// `export K=V` and `K=V cmd` set the environment, `$HOME` / `${VAR}` / `$env:VAR` / `%VAR%` expand from it, and
+// `bash -c '…'` / `sh -c` / `env` / `nohup` / `sudo` / `timeout` / `npx` and friends are unwrapped.
 // A regex over the raw string would miss `cd app && npm start` and `echo $(cat ~/.reelmimic/secrets.json)`.
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
+import { LIST_VAR } from '../hooks/fast.mjs';
 
 export interface Simple {
   argv: string[];
@@ -14,7 +16,14 @@ export interface Simple {
 }
 type Tok = { k: 'w'; v: string } | { k: 'op'; v: string };
 
-const WRAPPERS = new Set(['sudo', 'nohup', 'time', 'command', 'exec', 'nice', 'stdbuf']);
+// Launchers that run the rest of the line as the real program, with the options that take a value (`sudo -u user`,
+// not `sudo -n`) and how many positionals they eat first (`timeout 600 node x`: the duration).
+const LAUNCHERS: Record<string, { valued?: string[]; positional?: number }> = {
+  sudo: { valued: ['-u', '-g', '-C', '-D', '-h', '-p', '-r', '-t', '-U', '-T'] }, nohup: {}, time: {}, command: {}, exec: { valued: ['-a'] },
+  nice: { valued: ['-n'] }, stdbuf: { valued: ['-i', '-o', '-e'] }, timeout: { valued: ['-s', '-k', '--signal', '--kill-after'], positional: 1 },
+  npx: { valued: ['-p', '--package'] }, pnpx: { valued: ['-p', '--package'] }, bunx: { valued: ['-p', '--package'] },
+};
+const PM_EXEC = new Set(['exec', 'dlx', 'x']);   // `npm exec tsx …`, `pnpm dlx …`, `bun x …`
 const SHELLS = /^(?:.*[\\/])?(?:bash|sh|zsh|dash)(?:\.exe)?$/i;
 
 export function lex(src: string): Tok[] {
@@ -106,7 +115,7 @@ export function parse(src: string, cwd: string, env: Record<string, string> = {}
     if (t.k === 'op' && t.v === '(') { stack.push({ words, redirects, pending, cwd: state.cwd }); words = []; redirects = []; pending = ''; continue; }
     if (t.k === 'op' && t.v === ')') { flush(); const s = stack.pop(); if (s) { ({ words, redirects, pending } = s); state.cwd = s.cwd; } continue; }
     if (t.k === 'op') { flush(); continue; }
-    if (pending) { if (pending === '>' || pending === '>>') redirects.push(resolvePath(t.v, state.cwd)); pending = ''; continue; }
+    if (pending) { if (pending === '>' || pending === '>>') redirects.push(resolvePath(expandVars(t.v, state.env), state.cwd)); pending = ''; continue; }
     words.push(t.v);
   }
   flush();
@@ -115,14 +124,23 @@ export function parse(src: string, cwd: string, env: Record<string, string> = {}
 
 function expand(words: string[], redirects: string[], state: { cwd: string; env: Record<string, string> }, depth: number): Simple[] {
   const local: Record<string, string> = {};
+  // Expanded with the environment as it was before this command: in `HOME=/x cat $HOME/f` the shell reads the old HOME.
+  words = words.map((w) => expandVars(w, state.env));
   let i = 0;
   for (; i < words.length && /^[A-Za-z_]\w*=/.test(words[i]); i++) { const [k, ...v] = words[i].split('='); local[k] = v.join('='); }
   let argv = words.slice(i);
-  // Unwrap launchers so the policy sees the real program: `env -i K=V node x`, `nohup node x &`, `sudo -u u cmd`.
+  // Unwrap launchers so the policy sees the real program: `env -i K=V node x`, `nohup node x &`, `sudo -u u cmd`,
+  // `timeout 600 node x`, `npx tsx x`, `pnpm exec tsx x`.
   for (;;) {
-    const a0 = base(argv[0] ?? '');
+    const a0 = base(argv[0] ?? ''), l = LAUNCHERS[a0];
     if (a0 === 'env') { argv = argv.slice(1); while (argv[0] && (argv[0].startsWith('-') || argv[0].includes('='))) { const w = argv.shift()!; if (w.includes('=') && !w.startsWith('-')) { const [k, ...v] = w.split('='); local[k] = v.join('='); } } continue; }
-    if (WRAPPERS.has(a0)) { argv = argv.slice(1); while (argv[0]?.startsWith('-')) argv = argv.slice(argv[0] === '-u' || argv[0] === '-n' ? 2 : 1); continue; }
+    if (['npm', 'pnpm', 'yarn', 'bun'].includes(a0) && PM_EXEC.has(argv[1] ?? '')) { argv = argv.slice(2); while (argv[0]?.startsWith('-')) argv = argv.slice(argv[0] === '-p' || argv[0] === '--package' ? 2 : 1); continue; }
+    if (l) {
+      argv = argv.slice(1);
+      while (argv[0]?.startsWith('-')) { const o = argv.shift()!; if (o === '--') break; if (l.valued?.includes(o)) argv.shift(); }
+      argv = argv.slice(l.positional ?? 0);
+      continue;
+    }
     break;
   }
   const env = { ...state.env, ...local };
@@ -140,6 +158,19 @@ function expand(words: string[], redirects: string[], state: { cwd: string; env:
     if (c > 0 && argv[c + 1] != null) return [self, ...parse(argv[c + 1], state.cwd, env, depth + 1)];
   }
   return [self];
+}
+
+/** `$HOME`, `${VAR}`, PowerShell `$env:VAR` and cmd `%VAR%`, from the command's own exports, then the hook's
+ *  environment (which the agent's shell inherits). Unknown names stay as written, and so do search lists (`$PATH`):
+ *  they are never one file, and hooks/fast.mjs skips them the same way. Single quotes would stop bash expanding; the
+ *  lexer has dropped them by now, so this expands a little more than bash would — the safe side. */
+export function expandVars(w: string, env: Record<string, string> = {}): string {
+  if (!w.includes('$') && !w.includes('%')) return w;
+  return w.replace(/\$\{([A-Za-z_]\w*)\}|\$env:([A-Za-z_]\w*)|\$([A-Za-z_]\w*)|%([A-Za-z_]\w*)%/gi, (m, a, b, c, d) => {
+    const k = a ?? b ?? c ?? d;
+    if (LIST_VAR.test(k)) return m;
+    return env[k] ?? process.env[k] ?? (/^(?:HOME|USERPROFILE)$/i.test(k) ? homedir() : m);
+  });
 }
 
 /** Lower-case program name without directory or .exe/.cmd, so `C:\…\node.exe` and `node` compare equal. */

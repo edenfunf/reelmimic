@@ -42,6 +42,14 @@ test('only a freshly written file counts as the output', () => {
   assert.equal(freshOutput({ ...r, out: null }, d, { withinMs: 60_000 })?.endsWith('renders.mp4'), true);
 });
 
+test('a render that named its output and did not write it wrote nothing (another fresh video is not it)', () => {
+  const d = mkdtempSync(join(tmpdir(), 'harness-named-'));
+  writeFileSync(join(d, 'other.mp4'), 'fresh, from some other command');
+  const r = { kind: 'film' as const, out: join(d, 'out', 'video.mp4').replace(/\\/g, '/'), engine: 'render.mjs' };
+  assert.equal(freshOutput(r, d, { withinMs: 60_000 }), null);
+  assert.equal(freshOutput({ ...r, out: null }, d, { withinMs: 60_000 })?.endsWith('other.mp4'), true, 'only an unnamed output is looked for');
+});
+
 test('with the call’s start time, a file from 30 s before it is a leftover (the window alone would take it)', () => {
   const d = mkdtempSync(join(tmpdir(), 'harness-since-')), now = Date.now(), f = join(d, 'video.mp4');
   writeFileSync(f, 'x'); utimesSync(f, new Date(now - 30_000), new Date(now - 30_000));
