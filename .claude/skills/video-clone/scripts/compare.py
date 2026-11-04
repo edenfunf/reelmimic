@@ -14,6 +14,7 @@ reference shot number it maps to, and start_s/end_s). Analyses our video with th
 Open the images and score each shot (see the engine skill's Review section). Numbers flag, eyes decide.
 """
 import argparse, json, os, sys
+from pathlib import Path
 import numpy as np, cv2
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from analyze import shot_details  # same measurements for both films
@@ -39,8 +40,8 @@ def label(img, text, y=18):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("--video", default="out/video.mp4")
     a = ap.parse_args(); P = a.project
-    rep = json.load(open(os.path.join(P, "analysis", "report.json"), encoding="utf-8"))
-    plan = json.load(open(os.path.join(P, "plan.json"), encoding="utf-8"))
+    rep = json.loads(Path(P, "analysis", "report.json").read_text(encoding="utf-8"))
+    plan = json.loads(Path(P, "plan.json").read_text(encoding="utf-8"))
     ref_video = os.path.join(P, "analysis", rep.get("analysed", "source.mp4"))
     if not os.path.exists(ref_video): ref_video = os.path.join(P, "analysis", "source.mp4")
     ours = os.path.join(P, a.video)
@@ -65,7 +66,7 @@ def main():
         result.append({"id": s["id"], "ref_shot": rn, "ref": rd and {"camera": rd["camera"], "look": rd["look"]}, "ours": {"camera": od["camera"], "look": od["look"]}})
     if rows:
         cv2.imwrite(os.path.join(out_dir, "compare_all.jpg"), np.vstack(rows), [cv2.IMWRITE_JPEG_QUALITY, 85])
-    json.dump(result, open(os.path.join(out_dir, "compare.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    Path(out_dir, "compare.json").write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
     for r in result:
         rc, oc = (r["ref"] or {}).get("camera", {}), r["ours"]["camera"]
         flag = "" if not rc or rc.get("pace") == oc.get("pace") or (rc.get("pace") != "still" and oc.get("pace") != "still") else "  ← motion mismatch"

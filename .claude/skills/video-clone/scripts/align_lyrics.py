@@ -15,6 +15,7 @@ are interpolated between their neighbours. Writes:
 and prints a quality report: lines matched, mean match ratio. Low ratios mean "check by ear" (the app shows them).
 """
 import argparse, difflib, json, os, re, shutil, subprocess, sys, tempfile
+from pathlib import Path
 
 FFMPEG_FALLBACK = os.environ.get("FFMPEG_DIR", "")   # folder with ffmpeg/ffprobe when they are not on PATH
 if not shutil.which("ffmpeg") and FFMPEG_FALLBACK and os.path.isdir(FFMPEG_FALLBACK): os.environ["PATH"] += os.pathsep + FFMPEG_FALLBACK
@@ -72,7 +73,7 @@ def main():
     ap.add_argument("--start", type=float, default=0.0); ap.add_argument("--end", type=float)
     ap.add_argument("--model", default="medium"); ap.add_argument("--lang", default="zh")
     a = ap.parse_args()
-    lines = lyric_lines(open(a.lyrics, encoding="utf-8").read())
+    lines = lyric_lines(Path(a.lyrics).read_text(encoding="utf-8"))
     if not lines: sys.exit("no lyric lines in " + a.lyrics)
     tmp = os.path.join(tempfile.mkdtemp(), "clip.wav")
     cmd = ["ffmpeg", "-v", "error", "-y", "-ss", str(a.start)]
@@ -108,7 +109,7 @@ def main():
         if out[k]["start"] < out[k - 1]["start"]: out[k]["start"] = out[k - 1]["end"]
     with open(a.out, "w", encoding="utf-8") as f:
         for o in out: f.write(f"{fmt(o['start'])}{o['text']}\n")
-    json.dump({"clip_start": a.start, "lines": out}, open(os.path.splitext(a.out)[0] + ".json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    Path(os.path.splitext(a.out)[0] + ".json").write_text(json.dumps({"clip_start": a.start, "lines": out}, ensure_ascii=False, indent=1), encoding="utf-8")
     ok = [o for o in out if not o.get("interpolated")]
     print(f"lines {len(out)}, matched {len(ok)}, mean match {sum(o['match'] for o in out) / len(out):.2f}")
     for o in out: print(f"  {fmt(o['start'])}–{fmt(o['end'])} match {o['match']:.2f}{' (interpolated)' if o.get('interpolated') else ''}  {o['text']}")

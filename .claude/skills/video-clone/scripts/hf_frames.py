@@ -26,6 +26,7 @@ times a few ms off the 30 fps grid, saw the in-between it had designed, and the 
 """
 import argparse, glob, hashlib, json, os, re, shutil, subprocess, sys, tempfile, time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from PIL import Image
 
 MAX_PARALLEL = int(os.environ.get("HF_SNAPSHOT_SLOTS", "3"))
@@ -84,8 +85,8 @@ def silent_mirror(build, key):
         for f in files:
             src, out = os.path.join(root, f), os.path.join(tmp, rel, f)
             if f.endswith(".html"):
-                s = open(src, encoding="utf-8", errors="surrogateescape").read()
-                open(out, "w", encoding="utf-8", errors="surrogateescape").write(AUDIO.sub("", s))
+                s = Path(src).read_text(encoding="utf-8", errors="surrogateescape")
+                Path(out).write_text(AUDIO.sub("", s), encoding="utf-8", errors="surrogateescape")
             else:
                 try: os.link(src, out)
                 except OSError: shutil.copy2(src, out)
@@ -113,7 +114,7 @@ def snapshot(build, times, outdir):
 def film_fps(build):
     for f in (os.path.join(os.path.dirname(build), "plan.json"), os.path.join(build, "production.json")):
         try:
-            d = json.load(open(f, encoding="utf-8-sig")); v = (d.get("format") or {}).get("fps") or d.get("fps")
+            d = json.loads(Path(f).read_text(encoding="utf-8-sig")); v = (d.get("format") or {}).get("fps") or d.get("fps")
             if v: return float(v)
         except (OSError, ValueError, AttributeError): pass
     return None
