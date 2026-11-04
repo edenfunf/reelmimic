@@ -4,17 +4,18 @@ wall-clock per stage, every agent turn (who / phase / minutes), the critical pat
 
   python timeline.py projects/<id> [--json out.json]
 """
-import argparse, collections, datetime as D, json, os, re, sys
+import argparse, collections, datetime as D, json, os, re
+from pathlib import Path
 
 def ts(x): return D.datetime.fromisoformat(x.replace('Z', ''))
 def mins(a, b): return (b - a).total_seconds() / 60
 
 ap = argparse.ArgumentParser(); ap.add_argument('proj'); ap.add_argument('--json'); a = ap.parse_args()
-j = json.load(open(os.path.join(a.proj, 'job.json'), encoding='utf-8'))
+j = json.loads(Path(a.proj, 'job.json').read_text(encoding='utf-8'))
 ev = j.get('log', [])
 full = os.path.join(a.proj, 'logs', 'events.jsonl')
 if os.path.exists(full):
-    ev = [json.loads(l) for l in open(full, encoding='utf-8') if l.strip()] or ev
+    ev = [json.loads(l) for l in Path(full).read_text(encoding='utf-8').splitlines() if l.strip()] or ev
 
 # agent turns
 open_t, turns = {}, []
@@ -54,7 +55,7 @@ for t in turns: print(f"  {t['start'][11:16]}  {t['who'] or '-':14s} {t['phase']
 chunks = collections.defaultdict(list)
 shot2chunk = {}
 try:
-    prod = json.load(open(os.path.join(a.proj, 'build', 'production.json'), encoding='utf-8'))
+    prod = json.loads(Path(a.proj, 'build', 'production.json').read_text(encoding='utf-8'))
     for c in prod.get('chunks') or []:
         for s in c.get('shots') or []: shot2chunk[s] = c['id']
 except (OSError, ValueError): pass
@@ -65,15 +66,16 @@ for t in turns:
 if chunks:
     print('\nper segment (build / review / fix minutes, rounds):')
     for c in sorted(chunks, key=lambda x: int(x[1:])):
-        L = chunks[c]; f = lambda p: sum(m for ph, m in L if ph == p)
+        L = chunks[c]; f = collections.Counter(); n = collections.Counter()
+        for ph, m in L: f[ph] += m; n[ph] += 1
         rounds = (j.get('pipeline') or {}).get('chunks', {}).get(c, {}).get('round')
-        print(f"  {c}: build {f('build_chunk'):.0f}, review {f('shot_qa'):.0f} ({sum(1 for ph, _ in L if ph == 'shot_qa')} shot reviews), fix {f('fix_chunk'):.0f} ({sum(1 for ph, _ in L if ph == 'fix_chunk')} fix turns), rounds {rounds or '?'}  → {sum(m for _, m in L):.0f} min")
+        print(f"  {c}: build {f['build_chunk']:.0f}, review {f['shot_qa']:.0f} ({n['shot_qa']} shot reviews), fix {f['fix_chunk']:.0f} ({n['fix_chunk']} fix turns), rounds {rounds or '?'}  → {sum(m for _, m in L):.0f} min")
 
 # what agents spend time on (gap to their next event)
 cat = collections.Counter(); byw = collections.defaultdict(list)
 for e in ev:
     if e.get('who'): byw[e['who']].append(e)
-for w, es in byw.items():
+for es in byw.values():
     for x, y in zip(es, es[1:]):
         g = (ts(y['ts']) - ts(x['ts'])).total_seconds()
         if g > 1800 or x.get('type') == 'turn': continue
@@ -86,4 +88,19 @@ for w, es in byw.items():
 tot = sum(cat.values()) or 1
 print('\nagent time by activity (all agents summed):')
 for k, v in cat.most_common(): print(f"  {k:18s} {v / 60:6.0f} min  {100 * v / tot:4.0f}%")
-if a.json: json.dump({'turns': turns, 'activity_min': {k: round(v / 60, 1) for k, v in cat.items()}}, open(a.json, 'w'), indent=1)
+# what the harness hooks did in this job (.claude/harness, logged by the agents' hooks to logs/harness.jsonl)
+hl = Path(a.proj, 'logs', 'harness.jsonl')
+H = [json.loads(l) for l in hl.read_text(encoding='utf-8').splitlines() if l.strip()] if hl.exists() else []
+if H:
+    def kind(h):
+        o = h.get('out') or {}; hs = o.get('hookSpecificOutput') or {}
+        if h.get('error'): return 'hook error (failed open)'
+        if hs.get('permissionDecision'): return f"{hs['permissionDecision']}: {hs.get('permissionDecisionReason', '').split(']')[0].lstrip('[')}"
+        if o.get('decision') == 'block': return 'stop: sent back to look at a render'
+        ctx = hs.get('additionalContext', '')
+        return 'render: contact sheet + scan' if 'Contact sheet' in ctx else 'render: noted' if ctx else 'other'
+    K = collections.Counter(kind(h) for h in H); who = collections.defaultdict(collections.Counter)
+    for h in H: who[kind(h)][h.get('agent') or '-'] += 1
+    print('\nharness (hooks):')
+    for k, v in K.most_common(): print(f"  {k:44s} {v:4d}   {', '.join(f'{w}×{c}' for w, c in who[k].most_common(4))}")
+if a.json: Path(a.json).write_text(json.dumps({'turns': turns, 'activity_min': {k: round(v / 60, 1) for k, v in cat.items()}, 'harness': dict(K) if H else {}}, indent=1), encoding='utf-8')

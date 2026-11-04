@@ -57,7 +57,8 @@ export async function turn<P extends Phase>(id: string, phase: P, vars: StepVars
     log(id, { type: 'turn', state: 'start', phase, who: label });
     let res: AgentResult;
     try {
-      res = await runAgent({ kind: j.agent, cwd: ROOT, prompt, sessionId: resume, signal,
+      // the job's folder and agent name reach the harness hooks (.claude/harness), which log their decisions to logs/harness.jsonl
+      res = await runAgent({ kind: j.agent, cwd: ROOT, prompt, sessionId: resume, signal, env: { REELMIMIC_JOB_DIR: d, REELMIMIC_AGENT: label },
         onEvent: (e) => {
           if (e.type === 'session' && session !== 'fresh') update(id, (jj) => { if (session === 'director') jj.sessionId = e.id; else { jj.sessions = jj.sessions || {}; jj.sessions[session] = e.id; } });
           if (e.type !== 'done') log(id, { ...e, who: label });

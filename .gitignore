@@ -14,6 +14,7 @@ secrets.json
 .env.*
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
+.claude/harness/audit.jsonl
 
 # --- build output & dependencies ---
 node_modules/
