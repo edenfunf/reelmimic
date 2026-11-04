@@ -62,17 +62,19 @@ def main():
         dark = sum(1 for _, im in ref if max(im.convert("L").getextrema()) < 30) / max(1, len(ref))
         if dark > 0.8:
             raise SystemExit(f"reference rows are black ({dark:.0%} of frames) — wrong file or time range? Use the file in report.json 'analysed' (usually analysis/proxy.mp4)")
-    fh = ours[0][1].height; lab = 18; f = font(13)
+    lab = 18; f = font(13)
     rows = [ours[i:i + a.cols] for i in range(0, len(ours), a.cols)]
     refrows = [ref[i:i + a.cols] for i in range(0, len(ref), a.cols)] if ref else []
     bands = []
     for k, row in enumerate(rows):
         if ref: bands.append(("REF", refrows[k] if k < len(refrows) else []))
         bands.append(("OURS" if ref else "", row))
-    W = a.cols * a.w + 50; H = len(bands) * (fh + lab) + (len(rows) * 8 if ref else 0)
+    # each band is as tall as its frames: a reference with another aspect ratio (9:16 vs our 16:9) must not run into our row
+    heights = [max((im.height for _, im in row), default=ours[0][1].height) for _, row in bands]
+    W = a.cols * a.w + 50; H = sum(h + lab for h in heights) + (len(rows) * 8 if ref else 0)
     sheet = Image.new("RGB", (W, H), (24, 24, 28)); d = ImageDraw.Draw(sheet)
     y = 0
-    for i, (name, row) in enumerate(bands):
+    for (name, row), fh in zip(bands, heights):
         d.text((4, y + lab + fh // 2 - 7), name, fill=(255, 200, 80) if name == "REF" else (120, 220, 255), font=f)
         for j, (t, im) in enumerate(row):
             x = 50 + j * a.w
