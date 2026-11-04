@@ -121,6 +121,8 @@ Claude Code 会自己读到 repo 里的 skills，Codex 会读 `AGENTS.md`，不�
 | `TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID` | 同样的通知改由 Telegram 机器人发（视频小于 50 MB 会直接发过去）。找 [@BotFather](https://t.me/BotFather) 建一个 bot 拿到 token，给它发任意一句话，再跑 `npm run doctor` 就会显示你的 chat id |
 | `TELEGRAM_COMMANDS` | 设成 `1` 就能反过来问机器人进度：`/list` 列出最近的项目，`/status 2`（或标题的一部分）看某个项目的阶段、需要你给什么、错误信息和链接。只回你的 chat，而且只会汇报、不会改动项目。用的是 long polling，bot 设了 webhook 就不能用 |
 | `REELMIMIC_URL` | 消息里链接的网址开头（默认 `http://localhost:4318`） |
+| `NOTIFY_EVENTS` | 只收这些事件，用逗号分开：`plan_ready`、`needs_input`、`done`、`error`（默认全部） |
+| `NOTIFY_QUIET_HOURS` | 例如 `23-8`：这段时间的消息先留着，时间到再发（出错照样马上发），以服务器的时间为准 |
 
 ## 文档
 

@@ -121,6 +121,8 @@ Claude Code 會自己讀到 repo 裡的 skills，Codex 會讀 `AGENTS.md`，不�
 | `TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID` | 同樣的通知改由 Telegram 機器人傳（影片小於 50 MB 會直接傳過去）。跟 [@BotFather](https://t.me/BotFather) 建一個 bot 拿到 token，傳任何一句話給它，再跑 `npm run doctor` 就會顯示你的 chat id |
 | `TELEGRAM_COMMANDS` | 設成 `1` 就能反過來問機器人進度：`/list` 列出最近的專案，`/status 2`（或標題的一部分）看某個專案的階段、需要你給什麼、錯誤訊息和連結。只回你的 chat，而且只會回報、不會改動專案。用的是 long polling，bot 設了 webhook 就不能用 |
 | `REELMIMIC_URL` | 訊息裡連結的網址開頭（預設 `http://localhost:4318`） |
+| `NOTIFY_EVENTS` | 只收這些事件，用逗號分開：`plan_ready`、`needs_input`、`done`、`error`（預設全部） |
+| `NOTIFY_QUIET_HOURS` | 例如 `23-8`：這段時間的訊息先留著，時間到再傳（出錯照樣馬上傳），以伺服器的時間為準 |
 
 ## 文件
 
