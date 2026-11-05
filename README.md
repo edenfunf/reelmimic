@@ -50,7 +50,7 @@ not a one-shot generate-and-done.
 
 ReelMimic learns how the reference was made. It doesn't carry over the original footage, characters or assets.
 
-The whole thing runs on your own computer, with your own Claude Code or Codex.
+The whole thing runs on your own computer, with your own Claude Code, Codex or OpenCode.
 
 <p align="center">
 <picture>
@@ -87,7 +87,7 @@ The whole thing runs on your own computer, with your own Claude Code or Codex.
   for a new style.
 - **It takes a while.** A 30–60 second video usually takes 1–3.5 hours after you approve the plan, depending on the
   length and the look. Watercolor and crayon are the slowest, because every frame is painted with brushes.
-- **It uses your AI plan.** All the work runs through your Claude Code or Codex account, so it counts toward that
+- **It uses your AI plan.** All the work runs through your Claude Code, Codex or OpenCode account, so it counts toward that
   account's usage. If you hit a limit, the job pauses and can pick up where it stopped.
 - **Tested mostly on Windows.** macOS and Linux should work, but they've had less testing. Issues are welcome.
 - **No real people.** It makes animation, not live-action footage of real people.
@@ -101,7 +101,8 @@ The whole thing runs on your own computer, with your own Claude Code or Codex.
 ## Getting started
 
 You'll need Node.js 22.18+, Python 3.10+, FFmpeg, Chrome, and either
-[Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Codex CLI](https://github.com/openai/codex) (logged in).
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex CLI](https://github.com/openai/codex) or
+[OpenCode](https://opencode.ai) (logged in and configured with a model).
 
 ```bash
 git clone https://github.com/edenfunf/reelmimic.git && cd reelmimic
@@ -111,11 +112,11 @@ git clone https://github.com/edenfunf/reelmimic.git && cd reelmimic
 
 Then open <http://localhost:4318>. The install script checks your setup and tells you if anything's missing. You can run
 the check again any time with `cd app && npm run doctor`. Claude Code picks up the skills in this repo on its own, and
-Codex reads `AGENTS.md`, so there's nothing else to set up.
+Codex and OpenCode read `AGENTS.md`, so there's nothing else to set up.
 
 ### Your first video
 
-1. On the home page, drop in a reference video or paste a link, say what you want, and pick Claude Code or Codex.
+1. On the home page, drop in a reference video or paste a link, say what you want, and pick Claude Code, Codex or OpenCode.
 2. Wait for the breakdown and the plan. If you want changes, say so in the chat on the right. Screenshots work too.
 3. If the plan asks you for something (lyrics, say), add it or skip it, then hit **Approve and start**.
 4. The **Production line** tab shows where each character and each part of the video is, with the review screenshots.
@@ -131,11 +132,12 @@ committed. See [`secrets.example.json`](secrets.example.json) for the format.
 | `YATING_KEY` | Yating's Taiwanese Mandarin voices, for narration |
 | `ELEVENLABS_API_KEY` | Optional ElevenLabs TTS for workflows using the shared audio engine; also install `elevenlabs` in ReelMimic's configured Python environment |
 | `PIXABAY_KEY`, `FREESOUND_KEY` | More images, music and sound effects you're allowed to use (optional, Openverse works without a key) |
-| `FFMPEG_DIR`, `CHROME_PATH`, `CODEX_BIN`, `PYTHON` | Where to find these tools if they're not on your PATH |
+| `FFMPEG_DIR`, `CHROME_PATH`, `CODEX_BIN`, `OPENCODE_BIN`, `PYTHON` | Where to find these tools if they're not on your PATH |
 | `CODEX_SANDBOX` | Codex sandbox mode (default `danger-full-access`, like Claude Code with Bash allowed; `workspace-write` blocks the Chrome renderer) |
+| `OPENCODE_MODEL` | Model OpenCode runs, as `provider/model`. Defaults to OpenCode's own configured model |
 | `BUILDERS`, `MAX_AGENTS` | How many agents work on one video at once (default 6), and the limit across all projects (default 12) |
 | `PORT` | Web port (default 4318) |
-| `AGENTS_TTL_MS` | How long the detected Claude Code / Codex list is reused (default 300000 = 5 min; a missing agent is re-checked every 30 s; `0` re-checks on every request). Click the agent pill in the header to re-check now. A CLI installed into a new PATH folder still needs a server restart |
+| `AGENTS_TTL_MS` | How long the detected Claude Code / Codex / OpenCode list is reused (default 300000 = 5 min; a missing agent is re-checked every 30 s; `0` re-checks on every request). Click the agent pill in the header to re-check now. A CLI installed into a new PATH folder still needs a server restart |
 | `REELMIMIC_SECRETS` | Path to a different secrets file (legacy: `CLONE_STUDIO_SECRETS`) |
 | `UPLOAD_POST_KEY`, `UPLOAD_POST_USER` | Optional. Post a finished video to TikTok, Instagram, YouTube and others with `npm run post-video` (see below); `UPLOAD_POST_API` overrides the API address |
 
