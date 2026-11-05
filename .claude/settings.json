@@ -3,5 +3,24 @@
     "HYPERFRAMES_NO_TELEMETRY": "1",
     "DO_NOT_TRACK": "1",
     "REMOTION_TELEMETRY_DISABLED": "1"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|Read|Grep",
+        "hooks": [{ "type": "command", "command": "node --disable-warning=ExperimentalWarning \"$CLAUDE_PROJECT_DIR/.claude/harness/hooks/dispatch.mjs\" pre", "timeout": 15 }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Read",
+        "hooks": [{ "type": "command", "command": "node --disable-warning=ExperimentalWarning \"$CLAUDE_PROJECT_DIR/.claude/harness/hooks/dispatch.mjs\" post", "timeout": 120 }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "node --disable-warning=ExperimentalWarning \"$CLAUDE_PROJECT_DIR/.claude/harness/hooks/dispatch.mjs\" stop", "timeout": 15 }]
+      }
+    ]
   }
 }

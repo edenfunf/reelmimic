@@ -32,6 +32,7 @@ export interface AgentRun {
   sessionId?: string | null;
   onEvent?: (e: AgentEvent) => void;
   signal?: AbortSignal;
+  env?: Record<string, string>;   // extra environment for the agent and everything it starts (its hooks read REELMIMIC_JOB_DIR)
 }
 export interface AgentResult { sessionId?: string | null; text: string; ok: boolean; code: number | null; stderr: string; lastError: string }
 // Turn state while the CLI streams: filled in by the parsers, returned when the process closes
@@ -120,7 +121,7 @@ export function noteDropped(st: TurnState, drop: DropTrack, emit: Emit): void {
   if (st.text || drop.n === 0 || st.lastError) return;
   emit({ type: 'error', text: `dropped ${drop.n} non-JSON stdout line(s), first 200 chars: ${drop.sample}` });
 }
-export function runAgent({ kind, cwd, prompt, sessionId, onEvent = () => {}, signal }: AgentRun): Promise<AgentResult> {
+export function runAgent({ kind, cwd, prompt, sessionId, onEvent = () => {}, signal, env = {} }: AgentRun): Promise<AgentResult> {
   return new Promise((resolve) => {
     const st: TurnState = { sessionId, text: '', ok: false, cost: null, lastError: '' };
     const emit: Emit = (e) => { if (e.type === 'error') st.lastError = e.text; onEvent(e); };   // keep the last error for the job's error card
@@ -130,7 +131,7 @@ export function runAgent({ kind, cwd, prompt, sessionId, onEvent = () => {}, sig
     const args = isClaude ? claudeArgs(sessionId) : codexArgs(sessionId, cwd);
     // Windows: npm shims (claude.cmd) need a shell; args are fixed literals, the prompt goes through stdin.
     // its own process group (POSIX), so a cancel stops the renders and browsers it started too, not only the CLI
-    const child = spawn(cmd, args, { cwd, shell: IS_WIN, ...treeOpts, env: { ...process.env, HYPERFRAMES_NO_TELEMETRY: '1', DO_NOT_TRACK: '1' } });
+    const child = spawn(cmd, args, { cwd, shell: IS_WIN, ...treeOpts, env: { ...process.env, ...env, HYPERFRAMES_NO_TELEMETRY: '1', DO_NOT_TRACK: '1' } });
     // the signal lives as long as the whole flow: drop the listener when this turn ends, so finished children aren't killed (or kept) later
     const onAbort = () => killTree(child);
     if (signal) { if (signal.aborted) killTree(child); else signal.addEventListener('abort', onAbort, { once: true }); }

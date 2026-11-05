@@ -1,0 +1,13 @@
+{
+  // The harness runs on Node's type stripping like app/server; `tsc` only checks. Types come from app/node_modules.
+  // The hook entry (hooks/dispatch.mjs, hooks/fast.mjs) is plain JS for start-up speed and is checked through JSDoc.
+  "extends": "../../app/tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "typeRoots": ["../../app/node_modules/@types"],
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": ["**/*.mts", "**/*.mjs"]
+}

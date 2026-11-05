@@ -14,7 +14,7 @@ and a reference row that comes out (almost) black stops with an error instead of
 With --vs, the reference range is sampled into the same number of frames and each reference row sits directly above
 the matching row of ours (labelled REF / OURS with the time of every frame), so the build, the hit and the hold line up.
 """
-import argparse, os, shutil, subprocess, sys, tempfile
+import argparse, os, shutil, subprocess, tempfile
 
 FFMPEG_FALLBACK = os.environ.get("FFMPEG_DIR", "")
 if not shutil.which("ffmpeg") and FFMPEG_FALLBACK and os.path.isdir(FFMPEG_FALLBACK):
@@ -72,7 +72,7 @@ def main():
     W = a.cols * a.w + 50; H = len(bands) * (fh + lab) + (len(rows) * 8 if ref else 0)
     sheet = Image.new("RGB", (W, H), (24, 24, 28)); d = ImageDraw.Draw(sheet)
     y = 0
-    for i, (name, row) in enumerate(bands):
+    for name, row in bands:
         d.text((4, y + lab + fh // 2 - 7), name, fill=(255, 200, 80) if name == "REF" else (120, 220, 255), font=f)
         for j, (t, im) in enumerate(row):
             x = 50 + j * a.w

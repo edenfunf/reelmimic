@@ -208,7 +208,7 @@ def _shot_details_part(path, spans, offset):
         crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 1.0)
         _, lab, cen = cv2.kmeans(sample, 4, None, crit, 2, cv2.KMEANS_PP_CENTERS)
         order = np.argsort(-np.bincount(lab.ravel(), minlength=4))
-        dom = ["#%02X%02X%02X" % (int(cen[k][2]), int(cen[k][1]), int(cen[k][0])) for k in order]
+        dom = [f"#{int(cen[k][2]):02X}{int(cen[k][1]):02X}{int(cen[k][0]):02X}" for k in order]
         out.append({"shot": i + 1, "start": round(a, 2), "end": round(b, 2), "camera": mv,
                     "look": {"brightness": round(float(lum.mean()), 3), "contrast": round(float(lum.std()), 3),
                              "dark_ratio": round(float((lum < 0.08).mean()), 3), "colourfulness": round(colorful, 3), "dominant": dom}})
@@ -225,8 +225,8 @@ def audio(path, info, out):
     y, sr = librosa.load(raw, sr=22050, mono=False)
     if y.ndim == 1: y = np.stack([y, y])
     db = lambda x: float(20 * np.log10(np.sqrt(np.mean(x ** 2)) + 1e-12))
-    L, R, M = db(y[0]), db(y[1]), db((y[0] + y[1]) / 2)
-    phase_inverted = M < max(L, R) - 10
+    left, right, mono = db(y[0]), db(y[1]), db((y[0] + y[1]) / 2)
+    phase_inverted = mono < max(left, right) - 10
     mix = "pan=mono|c0=c0" if phase_inverted else "pan=mono|c0=0.5*c0+0.5*c1"
     wav = os.path.join(out, "audio.wav")
     run(["ffmpeg", "-v", "error", "-y", "-i", path, "-vn", "-af", f"{mix},loudnorm=I=-14:TP=-1.5", "-ar", "44100", wav])
@@ -234,7 +234,7 @@ def audio(path, info, out):
     y, sr = librosa.load(wav, sr=22050, mono=True)
     level = db(y)
     if level < -45:
-        return {"present": True, "silent": True, "levels_db": {"L": L, "R": R, "mono": M}, "phase_inverted": phase_inverted,
+        return {"present": True, "silent": True, "levels_db": {"L": left, "R": right, "mono": mono}, "phase_inverted": phase_inverted,
                 "note": "no usable sound: ask the user to re-record with system audio on, or to supply the audio file"}
     tempo, beats = librosa.beat.beat_track(y=y, sr=sr, units="time")
     tempo = float(np.atleast_1d(tempo)[0])
@@ -250,7 +250,7 @@ def audio(path, info, out):
     # noise floor: the quietest 10th percentile of 0.5 s windows
     hop = sr // 2; w = [db(y[i:i + hop]) for i in range(0, len(y) - hop, hop)]
     peaks = peak_candidates(y, sr, beats)
-    return {"present": True, "silent": False, "levels_db": {"L": round(L, 1), "R": round(R, 1), "mono": round(M, 1)},
+    return {"present": True, "silent": False, "levels_db": {"L": round(left, 1), "R": round(right, 1), "mono": round(mono, 1)},
             "phase_inverted": bool(phase_inverted), "noise_floor_db": round(float(np.percentile(w, 10)), 1) if w else None,
             "bpm": round(bpm, 2), "beat_seconds": round(60 / bpm, 4), "first_beat": round(float(beats[0]), 3) if len(beats) else None,
             "beats": [round(float(b), 3) for b in beats],
@@ -284,7 +284,7 @@ def peak_candidates(y, sr, beats, n=3):
         out.append((rise + 0.5 * max(0.0, before - dip) + 0.3 * after, i * 0.25, rise, after))
     out.sort(reverse=True)
     picked = []
-    for score, t, rise, after in out:
+    for _score, t, rise, after in out:
         if len(beats): t = float(beats[np.argmin(np.abs(np.asarray(beats) - t))])
         if any(abs(t - p["t"]) < 6 for p in picked): continue
         picked.append({"t": round(t, 2), "rise": round(float(rise), 2), "level_after": round(float(after), 2),

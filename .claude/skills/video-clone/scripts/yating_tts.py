@@ -13,6 +13,7 @@ speed: SMALLER = faster (0.5–1.5); pitch/energy 0.5–1.5. Plain text ≤ 600 
 """
 import argparse, base64, json, os, sys, time, urllib.request, urllib.error
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 URL = "https://tts.api.yating.tw/v2/speeches/short"
 VOICES = {"zh_en_female_1": "雅婷（女）", "zh_en_female_2": "意晴（女）", "zh_en_male_1": "家豪（男）", "zh_en_male_2": "志明（男）",
@@ -24,7 +25,7 @@ def key():
     if not k:
         for p in ("~/.reelmimic/secrets.json", "~/.clone-studio/secrets.json"):   # second: pre-rename location
             p = os.path.expanduser(p)
-            if os.path.exists(p): k = json.load(open(p)).get("YATING_KEY"); break
+            if os.path.exists(p): k = json.loads(Path(p).read_text(encoding="utf-8")).get("YATING_KEY"); break
     if not k: sys.exit("no YATING_KEY (env or ~/.reelmimic/secrets.json)")
     return k
 
@@ -39,7 +40,7 @@ def synth(text, out, voice="zh_en_female_1", speed=1.0, pitch=1.0, energy=1.0, s
         try:
             with urllib.request.urlopen(req, timeout=150) as r: d = json.load(r)
             os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
-            open(out, "wb").write(base64.b64decode(d["audioContent"]))
+            Path(out).write_bytes(base64.b64decode(d["audioContent"]))
             return out
         except urllib.error.HTTPError as e:
             msg = e.read().decode("utf-8", "replace")[:400]
@@ -61,7 +62,7 @@ def main():
         for k, v in VOICES.items(): print(k, v)
         return
     if a.lines:
-        L = json.load(open(a.lines, encoding="utf-8"))
+        L = json.loads(Path(a.lines).read_text(encoding="utf-8"))
         def one(x):
             return synth(x["text"], os.path.join(a.outdir, f"{x['id']}.wav"), x.get("voice", a.voice), x.get("speed", a.speed), x.get("pitch", a.pitch), x.get("energy", a.energy), x.get("ssml", a.ssml))
         with ThreadPoolExecutor(3) as ex:   # the API allows 3 concurrent requests per key
