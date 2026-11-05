@@ -51,6 +51,7 @@ def main():
     s, e = map(float, a.range.split(":"))
     n = max(2, round((e - s) * a.fps))
     ours = grab(a.video, s, e, n, a.w)
+    if not ours: raise SystemExit(f"no frames in {a.video} between {s}s and {e}s: is --range past the end of the video?")
     ref = None
     if a.vs:
         vs = a.vs
@@ -59,6 +60,7 @@ def main():
             print(f"reference: using {proxy} (the cropped picture) instead of {vs}"); vs = proxy
         rs, re_ = map(float, (a.vs_range or a.range).split(":"))
         ref = grab(vs, rs, re_, len(ours), a.w)
+        if not ref: raise SystemExit(f"no frames in {vs} between {rs}s and {re_}s: is --vs-range past the end of the reference?")
         dark = sum(1 for _, im in ref if max(im.convert("L").getextrema()) < 30) / max(1, len(ref))
         if dark > 0.8:
             raise SystemExit(f"reference rows are black ({dark:.0%} of frames) — wrong file or time range? Use the file in report.json 'analysed' (usually analysis/proxy.mp4)")
