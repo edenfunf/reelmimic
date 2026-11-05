@@ -79,7 +79,7 @@ const L = (id: string, zh: string, en: string) => (load(id).lang === 'en' ? en :
 export function load(id: string): Job { return JSON.parse(readFileSync(jpath(id), 'utf8')); }
 function save(job: Job) { job.updatedAt = now(); writeFileSync(jpath(job.id), JSON.stringify(job, null, 1)); bus.emit('job', job.id, { type: 'job', job }); return job; }
 function update(id: string, fn: (j: Job) => void) { const j = load(id); fn(j); return save(j); }
-function log(id: string, ev: LogEntry) {
+export function log(id: string, ev: LogEntry) {
   const e = { ts: now(), ...ev }; bus.emit('job', id, { type: 'log', ev: e });
   try { update(id, (j) => { j.log = [...(j.log || []).slice(-600), e]; }); } catch {}
   // the full, uncapped record lives in logs/events.jsonl (job.json keeps only the latest 600 for the UI)

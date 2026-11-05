@@ -107,6 +107,7 @@ const EN: Record<string, string> = {
   '逐格檢查鏡頭': 'Checking shots frame by frame', '修正鏡頭': 'Fixing shots',
   '這一輪因為伺服器重新啟動而中斷。': 'This turn was cut off by a server restart.',
   '▶ 開始': '▶ start', '■ 完成': '■ done', '■ 失敗': '■ failed',
+  '企劃好了': 'plan ready', '需要你處理': 'needs you', '影片完成': 'done', '出錯停下': 'stopped with an error',
 };
 // text with numbers / names in it
 const EN_RE: [RegExp, string][] = [

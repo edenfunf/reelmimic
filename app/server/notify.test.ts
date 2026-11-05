@@ -35,7 +35,12 @@ beforeEach(() => { hits = []; });
 
 J.createJob({ id: 'p1', title: 'brief line', agent: 'claude', brief: '', reference: { type: 'url', src: 'x' }, lang: 'en' });
 writeFileSync(join(J.dirOf('p1'), 'plan.json'), JSON.stringify({ title: 'Lantern Walk' }));
-const moveTo = (stage: Stage, extra: Partial<Job> = {}, id = 'p1') => J.bus.emit('job', id, { type: 'job', job: { ...J.load(id), stage, ...extra } });
+// saved like a real stage change: the notification's log entry reloads job.json and announces it again
+const moveTo = (stage: Stage, extra: Partial<Job> = {}, id = 'p1') => {
+  const job = { ...J.load(id), stage, ...extra };
+  writeFileSync(join(J.dirOf(id), 'job.json'), JSON.stringify(job));
+  J.bus.emit('job', id, { type: 'job', job });
+};
 const settle = async (n: number) => { for (let i = 0; i < 25 && hits.length < n; i++) await new Promise((r) => setTimeout(r, 20)); await new Promise((r) => setTimeout(r, 50)); };
 
 test('plan ready: one Discord message and one webhook call, with the plan title and a link', async () => {

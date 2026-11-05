@@ -41,7 +41,11 @@ export type AgentEvent =
   | { type: 'done'; ok: boolean; text: string; cost?: number | null };
 
 export type TurnMarker = { type: 'turn'; state: 'start' | 'end'; phase: string; ok?: boolean };
-export type LogEntry = (AgentEvent | TurnMarker) & { who?: string };
+export type NotifyEvent = 'plan_ready' | 'needs_input' | 'done' | 'error';
+// One notification channel's result (server/notify.ts), so a broken Discord / Telegram / webhook shows up in the project.
+// detail: the HTTP status or error of a failure; never a URL (the Telegram token is part of its URL).
+export type NotifyMarker = { type: 'notify'; channel: string; event: NotifyEvent; ok: boolean; detail?: string };
+export type LogEntry = (AgentEvent | TurnMarker | NotifyMarker) & { who?: string };
 export type LogEvent = LogEntry & { ts: string };
 
 // Something only the user can give (a file, a decision). Reviewers write these as needs_user.

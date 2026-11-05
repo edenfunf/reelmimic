@@ -36,7 +36,7 @@ export function buildThread(job: Job) {
   for (const it of items) {
     if (it.k === 'e') {
       const e = it.e, w = e.who || '_';
-      if (e.type === 'session' || e.type === 'done') continue;
+      if (e.type === 'session' || e.type === 'done' || e.type === 'notify') continue;   // notifications aren't agent steps
       if (e.type === 'turn') {
         if (e.state === 'start') buf[w] = { start: e.ts, steps: [], phase: e.phase, who: w };
         else if (buf[w]) { buf[w].ended = e.ts; buf[w].ok = e.ok; }
@@ -239,6 +239,7 @@ export function Conversation({ id, s, tag, setTag, onZoom }: { id: string; s: Sn
 }
 
 // ---------- raw activity log ----------
+const NOTIFY_EV: Record<string, string> = { plan_ready: '企劃好了', needs_input: '需要你處理', done: '影片完成', error: '出錯停下' };
 const hms = (iso: string) => { const d = new Date(iso); return isNaN(+d) ? '' : d.toLocaleTimeString('zh-TW', { hour12: false }); };
 function LogView({ id, job }: { id: string; job: Job }) {
   const log = job.log || [], box = useRef<HTMLDivElement>(null), stick = useRef(true);
@@ -247,7 +248,7 @@ function LogView({ id, job }: { id: string; job: Job }) {
   const rows = log.filter((e) => e.type !== 'session' && (who === 'all' || (e.who || '_') === who) && (!q || JSON.stringify(e).toLowerCase().includes(q.toLowerCase())));
   useEffect(() => { const b = box.current; if (b && stick.current) b.scrollTop = b.scrollHeight; }, [rows.length]);
   const download = () => {
-    const txt = log.map((x) => { const e = x as LogEvent & { name?: string; state?: string; text?: string; detail?: string; phase?: string }; return `${e.ts}\t${e.who || '-'}\t${e.type}\t${e.name || e.state || ''}\t${(e.text || e.detail || e.phase || '').replace(/\n/g, ' ')}`; }).join('\n');
+    const txt = log.map((x) => { const e = x as LogEvent & { name?: string; state?: string; text?: string; detail?: string; phase?: string; channel?: string; ok?: boolean }; return `${e.ts}\t${e.who || '-'}\t${e.type}\t${e.name || e.state || (e.channel && `${e.channel} ${e.ok ? 'ok' : 'failed'}`) || ''}\t${(e.text || e.detail || e.phase || '').replace(/\n/g, ' ')}`; }).join('\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain;charset=utf-8' })); a.download = `${id}-log.txt`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
   const line = (e: LogEvent) => {
@@ -255,6 +256,8 @@ function LogView({ id, job }: { id: string; job: Job }) {
     if (e.type === 'tool') return <><span className="lg-tool">{e.name}</span> {e.detail}</>;
     if (e.type === 'error') return <span className="lg-err">{e.text}</span>;
     if (e.type === 'thinking') return <span className="lg-think">{e.text}</span>;
+    // label in its own span so the DOM translation pass sees the exact string
+    if (e.type === 'notify') return <><span className={e.ok ? 'lg-tool' : 'lg-err'}>🔔 {e.channel} {e.ok ? '✓' : '✗'}</span> <span>{NOTIFY_EV[e.event] || e.event}</span>{e.detail && <span className="lg-err"> · {e.detail}</span>}</>;
     return <span>{'text' in e && e.text}</span>;
   };
   return (
@@ -266,7 +269,7 @@ function LogView({ id, job }: { id: string; job: Job }) {
       </div>
       <div className="lg-body" ref={box} onScroll={() => { const b = box.current!; stick.current = b.scrollHeight - b.scrollTop - b.clientHeight < 60; }}>
         {rows.length === 0 && <div className="small faint" style={{ padding: 16 }}>沒有紀錄</div>}
-        {rows.map((e, i) => <div key={i} className={`lg-row ${e.type}`}><span className="lg-ts">{hms(e.ts)}</span><span className="lg-who">{whoName(e.who)}</span><span className="lg-msg">{line(e)}</span></div>)}
+        {rows.map((e, i) => <div key={i} className={`lg-row ${e.type === 'notify' && !e.ok ? 'error' : e.type}`}><span className="lg-ts">{hms(e.ts)}</span><span className="lg-who">{whoName(e.who)}</span><span className="lg-msg">{line(e)}</span></div>)}
       </div>
       <div className="lg-foot small faint">顯示最近 {log.length} 筆 · 完整紀錄在 <a href={api.file(id, 'logs/events.jsonl')} target="_blank" rel="noreferrer">logs/events.jsonl</a></div>
     </div>
