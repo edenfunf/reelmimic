@@ -17,6 +17,7 @@ export const api = {
   waive: (id: string, input: string) => fetch(`/api/projects/${id}/waive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input }) }).then(j<Snapshot>),
   config: () => fetch('/api/config').then(j<Config>),
   settings: (id: string, body: Partial<Record<RoundKey, number | ''>>) => fetch(`/api/projects/${id}/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(j<Snapshot>),
+  mute: (id: string, muted: boolean) => fetch(`/api/projects/${id}/mute`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ muted }) }).then(j<Snapshot>),
   accept: (id: string) => fetch(`/api/projects/${id}/accept`, { method: 'POST' }).then(j<Ok>),
   resume: (id: string) => fetch(`/api/projects/${id}/resume`, { method: 'POST' }).then(j<Ok>),
   cancel: (id: string) => fetch(`/api/projects/${id}/cancel`, { method: 'POST' }).then(j<Ok>),

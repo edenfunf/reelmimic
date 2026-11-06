@@ -58,7 +58,7 @@ export function Project({ id }: { id: string }) {
       <a className="back" href="#/"><I n="back" s={2.2} />專案</a>
       <div className="p-head">
         <div className="grow"><h1>{s.plan?.title || job.title}</h1>{s.plan?.title && <div className="brief-line">{s.plan.logline || s.brief}</div>}</div>
-        <div className="p-head-r">{s.rounds && <RoundsButton id={id} r={s.rounds} />}<Status stage={job.stage} /></div>
+        <div className="p-head-r"><MuteButton id={id} muted={!!job.muted} />{s.rounds && <RoundsButton id={id} r={s.rounds} />}<Status stage={job.stage} /></div>
       </div>
       <div className="progress">
         {STEPS.map((x, i) => {
@@ -408,6 +408,17 @@ function RoundsButton({ id, r }: { id: string; r: SnapshotView['rounds'] }) {
       </div>}
     </div>
   );
+}
+
+// ---------- notifications on/off for this project (header button) ----------
+// Always shown: the page can't tell whether notifications are set up, so the title says it only matters if they are.
+function MuteButton({ id, muted }: { id: string; muted: boolean }) {
+  const [want, setWant] = useState<boolean | null>(null), on = want ?? muted;   // the click shows at once; the job event confirms it
+  useEffect(() => setWant(null), [muted]);
+  const flip = () => { setWant(!on); api.mute(id, !on).catch(() => setWant(null)); };
+  return <button className={`tool-chip ${on ? 'on' : ''}`} onClick={flip} aria-pressed={on}
+    title={on ? '這個專案的通知已關，按一下重新開啟。只有在 secrets.json 設定了 Discord、Telegram 或 WEBHOOK_URL 才有作用。' : '按一下關掉這個專案的通知，其他專案照常通知。只有在 secrets.json 設定了 Discord、Telegram 或 WEBHOOK_URL 才有作用。'}>
+    <I n={on ? 'bellOff' : 'bell'} />{on ? '通知已關' : '通知'}</button>;
 }
 
 // ---------- production line ----------
