@@ -220,3 +220,14 @@ describe('lyric alignment notices', () => {
     assert.ok(!existsSync(join(J.dirOf(id), 'analysis', 'lyrics', 'subs.lrc')), 'no subs.lrc without a run');
   });
 });
+
+describe('accept', () => {
+  test('the system line follows the project language', async () => {
+    for (const lang of ['en', 'zh-TW'] as const) {
+      const { id } = newJob({ lang });
+      S.update(id, (j) => { j.stage = 'done'; j.pipeline = { cast: { round: 2, pass: false } }; });   // done: accept returns before production
+      await J.accept(id);
+      assert.match(J.load(id).chat.at(-1)?.text || '', lang === 'en' ? /^You accepted the cast/ : /^你接受了目前的角色設定/);
+    }
+  });
+});
