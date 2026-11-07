@@ -8,7 +8,7 @@ stroke-order reveal is exact by construction for any text, no per-word tuning.
 Usage: gen-stroke-path.py <font.svg> <text> <target_width_px> <baseline_y> <x0>
 Prints: the path `d` string + layout info on stderr.
 """
-import re, sys
+import html, re, sys
 
 # Windows sizes stdio to the ANSI code page (cp1252). These scripts emit UTF-8 on
 # every platform; say so rather than depending on the console's code page. Carry
@@ -21,14 +21,17 @@ for _stream in (sys.stdout, sys.stderr):
 font_path, text, target_w, baseline_y, x0 = (
     sys.argv[1], sys.argv[2], float(sys.argv[3]), float(sys.argv[4]), float(sys.argv[5]))
 
-# SVG fonts are UTF-8 and each glyph's `unicode="…"` attribute IS a literal character.
-# Decoded with the platform default, a non-ASCII glyph key silently becomes the wrong
-# character (or raises) on Windows, so that glyph never matches the requested text.
+# SVG fonts are UTF-8. Decoded with the platform default, a non-ASCII glyph key silently
+# becomes the wrong character (or raises) on Windows, so that glyph never matches the
+# requested text. A glyph's `unicode="…"` is a literal character or an XML character
+# reference (`&amp;`, `&apos;`, `&#xe9;` …: 98 of the 188 glyphs in the bundled Hershey
+# fonts), so unescape it before keying on it.
 svg = open(font_path, encoding="utf-8").read()
 glyphs = {}
-for m in re.finditer(r'<glyph\s+unicode="(.)"[^>]*?horiz-adv-x="([\d.]+)"(?:[^>]*?d="([^"]*)")?', svg):
-    ch, adv, d = m.group(1), float(m.group(2)), m.group(3) or ""
-    glyphs[ch] = (adv, d)
+for m in re.finditer(r'<glyph\s+unicode="([^"]+)"[^>]*?horiz-adv-x="([\d.]+)"(?:[^>]*?d="([^"]*)")?', svg):
+    ch, adv, d = html.unescape(m.group(1)), float(m.group(2)), m.group(3) or ""
+    if len(ch) == 1:  # layout below is one glyph per character; skip ligatures
+        glyphs[ch] = (adv, d)
 # default advance for space
 space_adv = glyphs.get(" ", (300, ""))[0]
 
