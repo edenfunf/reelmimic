@@ -38,8 +38,15 @@ first = t0 + phase
 print(f'bpm {bpm:.2f}  (half-time {bpm / 2:.3f})   beat {B:.4f} s   a beat at {first:.3f} s')
 
 if 'lrc' in args:
+    # A line with several timestamps is sung that many times (a repeated chorus): list it once per time,
+    # in time order, the same way align_lyrics.py reads LRC.
+    rows, repeated = [], False
     for line in open(args['lrc'], encoding='utf-8'):
-        m = re.match(r'\[(\d+):(\d+(?:\.\d+)?)\](.*)', line.strip())
+        line = line.strip(); m = re.match(r'(?:\[\d+:\d+(?:\.\d+)?\])+', line)
         if not m: continue
-        t = int(m[1]) * 60 + float(m[2])
-        print(f'{t:8.2f}  beat {(t - first) / B:7.2f}  {m[3]}')
+        stamps = re.findall(r'\[(\d+):(\d+(?:\.\d+)?)\]', m[0])
+        repeated |= len(stamps) > 1
+        rows += [(int(mm) * 60 + float(ss), line[m.end():]) for mm, ss in stamps]
+    if repeated: rows.sort(key=lambda r: r[0])
+    for t, text in rows:
+        print(f'{t:8.2f}  beat {(t - first) / B:7.2f}  {text}')
