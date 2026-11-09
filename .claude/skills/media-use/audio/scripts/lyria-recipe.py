@@ -108,7 +108,11 @@ async def generate_bgm(args: argparse.Namespace) -> dict:
 
         try:
             await asyncio.wait_for(collect(), timeout=timeout)
-        except TimeoutError:
+        except asyncio.TimeoutError:
+            # asyncio.wait_for() raises asyncio.TimeoutError, which is a
+            # distinct class from the built-in TimeoutError before Python
+            # 3.11 (the README supports 3.10+), so the built-in name alone
+            # never catches the timeout there
             print(f"Timeout after {timeout:.0f}s, collected {len(buf)} bytes", file=sys.stderr)
 
     audio = bytes(buf[:target_bytes])
