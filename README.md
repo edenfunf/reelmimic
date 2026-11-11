@@ -15,7 +15,7 @@
 ![Node 22.18+](https://img.shields.io/badge/node-22.18%2B-5B57F0)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-5B57F0)
 
-**English** · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md)
+**English** · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
 <table>
   <tr>
