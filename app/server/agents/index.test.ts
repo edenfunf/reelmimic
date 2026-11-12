@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AgentEvent } from '../../shared/types.ts';
-import { feedStdout, noteDropped, parseClaude, parseCodex } from './index.ts';
+import { feedStdout, noteDropped, parseClaude, parseCodex, parseOpencode } from './index.ts';
 
 const run = (parse: typeof parseClaude, lines: object[]) => {
   const events: AgentEvent[] = [], st = { sessionId: null, text: '', ok: false, cost: null, lastError: '' };
@@ -59,6 +59,29 @@ test('Codex failure emits an error', () => {
   assert.deepEqual(events, [{ type: 'error', text: 'usage limit reached' }]);
 });
 
+test('OpenCode stream', () => {
+  const { events, st } = run(parseOpencode, [
+    { type: 'step_start', sessionID: 'ses_1', part: { type: 'step-start' } },
+    { type: 'tool_use', sessionID: 'ses_1', part: { type: 'tool', tool: 'shell', state: { input: { command: 'python analyze.py ref.mp4' } } } },
+    { type: 'text', sessionID: 'ses_1', part: { type: 'text', text: 'Done.' } },
+    { type: 'step_finish', sessionID: 'ses_1', part: { type: 'step-finish', cost: 0.02 } },
+  ]);
+  assert.deepEqual(events, [
+    { type: 'session', id: 'ses_1' },
+    { type: 'tool', name: 'shell', detail: 'python analyze.py ref.mp4' },
+    { type: 'text', text: 'Done.' },
+  ]);
+  assert.equal(st.sessionId, 'ses_1');
+  assert.equal(st.text, 'Done.');
+  assert.equal(st.cost, 0.02);
+});
+
+test('OpenCode provider error is not ok', () => {
+  const { events, st } = run(parseOpencode, [{ type: 'error', error: { message: 'User not found.' } }]);
+  assert.equal(st.ok, false);
+  assert.deepEqual(events, [{ type: 'error', text: 'User not found.' }]);
+});
+
 test('long tool details are shortened', () => {
   const { events } = run(parseClaude, [{ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Write', input: { file_path: 'x'.repeat(600) } }] } }]);
   const e = events[0] as Extract<AgentEvent, { type: 'tool' }>;
@@ -70,8 +93,8 @@ test('non-JSON stdout lines are counted, valid lines still parse', () => {
   const events: AgentEvent[] = [], st = { sessionId: null, text: '', ok: false, cost: null, lastError: '' };
   const drop = { n: 0, sample: '' };
   const emit = (e: AgentEvent) => { if (e.type === 'error') st.lastError = e.text; events.push(e); };
-  feedStdout('not json {', true, emit, st, drop);
-  feedStdout('{"type":"result","subtype":"success","is_error":false,"result":"hi"}', true, emit, st, drop);
+  feedStdout('not json {', 'claude', emit, st, drop);
+  feedStdout('{"type":"result","subtype":"success","is_error":false,"result":"hi"}', 'claude', emit, st, drop);
   assert.equal(drop.n, 1);
   assert.equal(drop.sample, 'not json {');
   assert.equal(st.text, 'hi');

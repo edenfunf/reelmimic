@@ -33,7 +33,7 @@ export function createAgentCache(
     .finally(() => { running = null; });
   return async function status(force = false): Promise<AgentStatus> {
     if (!cached || force || ttlMs === 0) return probe();
-    const ttl = cached.claude && cached.codex ? ttlMs : Math.min(ttlMs, MISS_TTL_MS);
+    const ttl = cached.claude && cached.codex && cached.opencode ? ttlMs : Math.min(ttlMs, MISS_TTL_MS);
     if (now() - at >= ttl) probe().catch(() => {});   // refresh in the background, answer with what we have
     return cached;
   };

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { DEFAULT_QUALITY } from '../../shared/types.ts';
+import { AGENT_LABEL, DEFAULT_QUALITY } from '../../shared/types.ts';
 import type { AgentKind, AgentStatus, Config, ProjectSummary, Quality } from '../../shared/types.ts';
 import { api } from './api.ts';
 import { I, BrandMark, Orb, Seg, AutoText, ago, RoundsEditor, QualityPicker, QUALITY_INFO, estimate } from './ui.tsx';
@@ -35,6 +35,7 @@ export default function App() {
         <button className="agents-cap" title="已連線的 AI 導演（點一下重新偵測）" disabled={agents === undefined} onClick={() => loadAgents(true)}>
           <span><i className={`dot ${agents === undefined ? '' : agents?.claude ? 'on' : 'bad'}`} /><span className="lbl">Claude Code</span></span>
           <span><i className={`dot ${agents === undefined ? '' : agents?.codex ? 'on' : 'bad'}`} /><span className="lbl">Codex</span></span>
+          <span><i className={`dot ${agents === undefined ? '' : agents?.opencode ? 'on' : 'bad'}`} /><span className="lbl">OpenCode</span></span>
         </button>
         <LangMenu />
         <button className="icon-btn" onClick={toggle} aria-label="切換外觀"><I n={theme === 'dark' ? 'sun' : 'moon'} /></button>
@@ -80,7 +81,7 @@ function Home({ agents }: { agents?: Partial<AgentStatus> }) {
         <div className="plist">{list.map((p, i) => (
           <a key={p.id} className="pcard fade-in" onMouseEnter={(e) => { const v = e.currentTarget.querySelector('video'); if (v) { v.currentTime = 3; v.play().catch(() => {}); } }} onMouseLeave={(e) => e.currentTarget.querySelector('video')?.pause()} style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }} href={`#/p/${p.id}`}>
             <div className="th" style={{ backgroundImage: p.thumb ? `url("${api.file(p.id, p.thumb)}")` : undefined }}>{p.stage === 'done' && <video muted loop playsInline preload="none" src={api.file(p.id, 'out/video.mp4')} onError={(e) => e.currentTarget.remove()} />}<Status stage={p.stage} /></div>
-            <div className="meta"><b>{p.title}</b><div className="small faint" style={{ marginTop: 2 }}>{p.agent === 'codex' ? 'Codex' : 'Claude Code'} · {ago(p.updatedAt)}{p.needs ? ` · ${p.needs} 項待你提供` : ''}</div></div>
+            <div className="meta"><b>{p.title}</b><div className="small faint" style={{ marginTop: 2 }}>{AGENT_LABEL[p.agent]} · {ago(p.updatedAt)}{p.needs ? ` · ${p.needs} 項待你提供` : ''}</div></div>
           </a>))}</div>
       </section>}
     </main>
@@ -100,7 +101,7 @@ function Composer({ agents }: { agents?: Partial<AgentStatus> }) {
   const pick = useRef<HTMLInputElement>(null), assets = useRef<HTMLInputElement>(null);
   const preview = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
-  useEffect(() => { if (agents && !agents.claude && agents.codex) setAgent('codex'); }, [agents]);
+  useEffect(() => { if (agents && !agents.claude) setAgent(agents.codex ? 'codex' : agents.opencode ? 'opencode' : 'claude'); }, [agents]);
   const validUrl = /^https?:\/\//.test(url.trim());
   const ok = (file || validUrl) && brief.trim() && !busy;
   const setVideo = (f: File | null | undefined) => { if (f && f.type.startsWith('video/')) { setFile(f); setUrl(''); setLinkMode(false); setErr(''); } else if (f) setErr('請選擇影片檔（mp4 / mov / webm）'); };
@@ -152,7 +153,8 @@ function Composer({ agents }: { agents?: Partial<AgentStatus> }) {
           <span className="grow" />
           <Seg value={agent} onChange={setAgent} options={[
             { value: 'claude', label: <><span className="long">Claude Code</span><span className="short">Claude</span></>, disabled: agents && !agents.claude, title: agents?.claude || '未偵測到' },
-            { value: 'codex', label: 'Codex', disabled: agents && !agents.codex, title: agents?.codex || '未偵測到' }]} />
+            { value: 'codex', label: 'Codex', disabled: agents && !agents.codex, title: agents?.codex || '未偵測到' },
+            { value: 'opencode', label: 'OpenCode', disabled: agents && !agents.opencode, title: agents?.opencode || '未偵測到' }]} />
           <button className="send" disabled={!ok} onClick={submit} aria-label="開始">{busy ? <span className="spin-ring" /> : <I n="up" s={2.2} />}</button>
         </div>
         {inputs.length > 0 && <div className="small faint" style={{ padding: '8px 10px 2px' }}>素材：{inputs.map((f) => f.name).join('、')}</div>}

@@ -3,7 +3,7 @@
 # Architecture
 
 ReelMimic has three layers: the **web app** (React), the **server** (Node — runs the workflow and dispatches
-agents; both are TypeScript and share their API types in `app/shared/types.ts`) and the **agent workspace** (the repo root, where Claude Code or Codex read skills, write files and render).
+agents; both are TypeScript and share their API types in `app/shared/types.ts`) and the **agent workspace** (the repo root, where Claude Code, Codex or OpenCode read skills, write files and render).
 The layers talk only through **files**: agents write files as specified in `CONTRACT.md`, the server decides whether a
 step is done by checking whether the files it must produce were updated, and the web app renders those files directly.
 So you can swap the agent, add an engine or change the UI without touching the other layers.
@@ -28,7 +28,7 @@ Server (app/server)
    ├─ store.ts          job.json (written atomically), event log, live-update bus, round limits and quality presets
    ├─ inputs.ts         required inputs and lyric timing
    ├─ prompts.ts        the instructions each step gives its agent (edits apply on the next turn, no restart)
-   └─ agents/index.ts   agent adapters: Claude Code / Codex → one event stream
+   └─ agents/index.ts   agent adapters: Claude Code / Codex / OpenCode → one event stream
    │  spawn (prompt on stdin, events streamed on stdout)
    ▼
 Agent workspace (repo root)
@@ -139,13 +139,13 @@ projects/<id>/
 
 ## 4. Agent adapters
 
-`agents/index.ts` turns both CLIs into the same events: `session`, `text`, `thinking`, `tool`, `error`, `done`.
+`agents/index.ts` turns all three CLIs into the same events: `session`, `text`, `thinking`, `tool`, `error`, `done`.
 
-| | Claude Code | Codex |
-|---|---|---|
-| Command | `claude -p --output-format stream-json --verbose --permission-mode acceptEdits --allowedTools …` | `codex exec --json -c sandbox_mode=danger-full-access -c approval_policy=never (CODEX_SANDBOX) …` |
-| Resume | `--resume <session>` | `exec resume <thread>` |
-| Prompt | stdin | stdin |
+| | Claude Code | Codex | OpenCode |
+|---|---|---|---|
+| Command | `claude -p --output-format stream-json --verbose --permission-mode acceptEdits --allowedTools …` | `codex exec --json -c sandbox_mode=danger-full-access -c approval_policy=never (CODEX_SANDBOX) …` | `opencode run --format json --auto [--model OPENCODE_MODEL] …` |
+| Resume | `--resume <session>` | `exec resume <thread>` | `--session <session>` |
+| Prompt | stdin | stdin | stdin |
 
 The server keeps one session per role: the director (shared for the whole video, so discussion keeps context), one per
 builder (kept across fix rounds); reviewers always start fresh.
