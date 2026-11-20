@@ -9,6 +9,8 @@
 
 **丢一支你喜欢的视频，做一支一样风格的新视频。**
 
+开源 AI 视频风格复刻工具，参考视频的剪辑风格，用 Claude Code 或 Codex 做出 2D 动画与动态图形。
+
 [![License: MIT](https://img.shields.io/badge/license-MIT-7A6BFF)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-E86BD2)](https://docs.anthropic.com/en/docs/claude-code)
 [![Codex CLI](https://img.shields.io/badge/Codex_CLI-supported-FF9D5C)](https://github.com/openai/codex)
@@ -80,6 +82,36 @@ ReelMimic 学的是参考片的做法，不是把原本的画面、角色或素�
 - **用的是你的 AI 额度。** 所有工作都通过你的 Claude Code 或 Codex 账号跑，会算进那个账号的用量。额度用完时会暂停，之后可以从停下来的地方继续。
 - **主要在 Windows 上测过。** macOS 和 Linux 应该可以用，但测得比较少，有问题欢迎开 issue。
 - **不做真人。** 它做的是动画，不会生成真实人物的实拍画面。
+
+## 常见问题
+
+### 有没有 AI 可以照一支参考视频的风格做新视频？
+
+有，ReelMimic 就是做这个的。给它参考视频（文件、手机录像或 YouTube 链接）加一句你想做什么，它会照参考片的剪辑风格做一支新的 2D 动画。
+
+### 可以模仿 YouTube 视频的节奏、剪辑和转场吗？
+
+可以。它会量出镜头数、每镜长度、BPM 和节拍点、转场、构图、配色和运镜，企划就是照这些数字排的。
+
+### 这是视频转视频（video-to-video）的风格迁移吗？
+
+不是。风格迁移是把原本的视频每一帧重新上色。ReelMimic 是先看懂参考片怎么做的，再从零一镜一镜做出新视频，角色和故事都是新的。
+
+### 可以做动画 MV 吗？
+
+可以。上面的 Sugar Rush 和 Sunshine Boy 都是用参考片加一首歌做出来的 MV。歌词只用你给的文本。
+
+### 可以剪我自己拍的实拍视频，或做写实视频吗？
+
+不行。它只做 2D 动画：矢量／动态图像、水彩、蜡笔、像素、剪纸、白板手绘和动漫赛璐璐。
+
+### 免费吗？是开源的吗？
+
+代码是 MIT 授权，跑在你自己的电脑上。AI 的部分会算进你自己的 Claude Code 或 Codex 用量。其他 API 密钥（配音、素材库）都是可选的。
+
+### 会把原视频的画面或角色搬过来吗？
+
+不会。它只学手法，参考片的画面、角色、Logo 和素材都不会拿来用。
 
 ## 接下来
 

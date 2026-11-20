@@ -9,6 +9,8 @@
 
 **Show it a video you love. Get a new video in the same style.**
 
+Open-source AI video style cloning for 2D animation and motion graphics, made by Claude Code or Codex agents.
+
 [![License: MIT](https://img.shields.io/badge/license-MIT-7A6BFF)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-E86BD2)](https://docs.anthropic.com/en/docs/claude-code)
 [![Codex CLI](https://img.shields.io/badge/Codex_CLI-supported-FF9D5C)](https://github.com/openai/codex)
@@ -91,6 +93,42 @@ The whole thing runs on your own computer, with your own Claude Code or Codex.
   account's usage. If you hit a limit, the job pauses and can pick up where it stopped.
 - **Tested mostly on Windows.** macOS and Linux should work, but they've had less testing. Issues are welcome.
 - **No real people.** It makes animation, not live-action footage of real people.
+
+## FAQ
+
+### Can AI make a new video in the style of a reference video?
+
+Yes, that's what ReelMimic is for. Give it a reference (a file, a phone recording or a YouTube link) and a one-line
+brief, and it makes a new 2D animation that follows the reference's editing style.
+
+### Can it copy the pacing, cuts and transitions of a YouTube video?
+
+Yes. It measures shot count, shot lengths, BPM and beat points, transitions, framing, colors and camera moves, and the
+plan is built on those numbers.
+
+### Is this video-to-video style transfer?
+
+No. Style transfer repaints every frame of an existing video. ReelMimic studies how the reference was made, then
+builds a new video from scratch, shot by shot, with its own characters and story.
+
+### Can it make an animated music video?
+
+Yes. Sugar Rush and Sunshine Boy above are both music videos made from a reference and a song. Lyrics only come from
+text you give it.
+
+### Can it edit my own live-action footage, or make realistic video?
+
+No. It only makes 2D animation: vector / motion graphics, watercolor, crayon, pixel art, paper cut-out, whiteboard
+and anime cel.
+
+### Is it free and open source?
+
+The code is MIT and runs on your own computer. The AI work counts toward your own Claude Code or Codex usage. Extra
+API keys (voices, stock media) are optional.
+
+### Will it copy the original video's footage or characters?
+
+No. It learns the technique only. Footage, characters, logos and assets from the reference are never reused.
 
 ## Roadmap
 
