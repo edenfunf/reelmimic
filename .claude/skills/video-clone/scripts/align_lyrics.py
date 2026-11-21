@@ -65,7 +65,9 @@ def lyric_lines(text):
 
 
 def fmt(t):
-    t = max(0.0, t); return f"[{int(t // 60):02d}:{t % 60:05.2f}]"
+    t = round(max(0.0, t), 2)   # round to centiseconds first: 59.999 must become 60.00 -> next minute, not "60.00" seconds
+    m, s = divmod(t, 60)
+    return f"[{int(m):02d}:{s:05.2f}]"
 
 
 def main():
