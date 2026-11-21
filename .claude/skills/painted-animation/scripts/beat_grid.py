@@ -38,15 +38,17 @@ first = t0 + phase
 print(f'bpm {bpm:.2f}  (half-time {bpm / 2:.3f})   beat {B:.4f} s   a beat at {first:.3f} s')
 
 if 'lrc' in args:
-    # A line with several timestamps is sung that many times (a repeated chorus): list it once per time,
-    # in time order, the same way align_lyrics.py reads LRC.
+    # Read LRC the way align_lyrics.py does. A line with several timestamps is sung that many times (a
+    # repeated chorus): list it once per time, in time order. [mm:ss:xx] stamps count too, and <mm:ss.xx>
+    # word tags are dropped from the text. utf-8-sig, since a BOM would hide the first line's timestamp.
     rows, repeated = [], False
-    for line in open(args['lrc'], encoding='utf-8'):
-        line = line.strip(); m = re.match(r'(?:\[\d+:\d+(?:\.\d+)?\])+', line)
+    for line in open(args['lrc'], encoding='utf-8-sig'):
+        line = line.strip(); m = re.match(r'(?:\[\d+:\d+(?:[.:]\d+)?\])+', line)
         if not m: continue
-        stamps = re.findall(r'\[(\d+):(\d+(?:\.\d+)?)\]', m[0])
+        stamps = re.findall(r'\[(\d+):(\d+)(?:[.:](\d+))?\]', m[0])
+        text = re.sub(r'<\d+:\d+(?:[.:]\d+)?>', '', line[m.end():])
         repeated |= len(stamps) > 1
-        rows += [(int(mm) * 60 + float(ss), line[m.end():]) for mm, ss in stamps]
+        rows += [(int(mm) * 60 + int(ss) + float('0.' + (ff or '0')), text) for mm, ss, ff in stamps]
     if repeated: rows.sort(key=lambda r: r[0])
     for t, text in rows:
         print(f'{t:8.2f}  beat {(t - first) / B:7.2f}  {text}')
