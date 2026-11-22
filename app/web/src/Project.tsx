@@ -324,10 +324,10 @@ const STEP_NAME: Record<string, string> = { analyzing: '拆解參考片', stylin
 function ErrorCard({ id, job }: { id: string; job: Job }) {
   const [busy, setBusy] = useState(false), [open, setOpen] = useState(false);
   // the server writes errors in the project's language: match both
-  const e = job.error || '', cancelled = /取消|^Cancelled/.test(e), restarted = /重新啟動|server restarted/i.test(e), limited = /用量到上限|usage limit/i.test(e);
+  const e = job.error || '', cancelled = /取消|^Cancelled/.test(e), restarted = /重新啟動|server restarted/i.test(e), limited = /用量到上限|用量、額度或速率限制|usage limit|credit, or rate limit/i.test(e);
   const missing = e.match(/(?:缺少輸出：|Missing output: )(.+)/)?.[1];
-  const title = cancelled ? `你停止了「${STEP_NAME[job.failed ?? ''] || job.failed}」` : restarted ? `「${STEP_NAME[job.failed ?? ''] || job.failed}」被伺服器重啟打斷` : limited ? 'AI 帳號的用量到上限了' : `「${STEP_NAME[job.failed ?? ''] || job.failed}」沒有完成`;
-  const why = cancelled ? '檔案保留在停下來的地方，可以從這裡繼續。' : restarted ? '做到一半的檔案都還在，繼續會從目前的檔案接著做。' : limited ? '等額度恢復，或換另一個 AI 導演，再從這裡繼續；做到一半的檔案都還在。' : missing ? `AI 這一輪結束了，但沒有產出應有的檔案（${missing}）。通常再跑一次就會好；也可以在右邊說明要怎麼處理。` : 'AI 這一輪出錯了。可以再跑一次，或在右邊說明要怎麼處理。';
+  const title = cancelled ? `你停止了「${STEP_NAME[job.failed ?? ''] || job.failed}」` : restarted ? `「${STEP_NAME[job.failed ?? ''] || job.failed}」被伺服器重啟打斷` : limited ? 'AI 額度或速率受限' : `「${STEP_NAME[job.failed ?? ''] || job.failed}」沒有完成`;
+  const why = cancelled ? '檔案保留在停下來的地方，可以從這裡繼續。' : restarted ? '做到一半的檔案都還在，繼續會從目前的檔案接著做。' : limited ? '供應商回報額度不足或速率限制。等在途請求完成、補充額度，或換另一個 AI 導演；已完成檔案會保留，之後從這裡繼續。' : missing ? `AI 這一輪結束了，但沒有產出應有的檔案（${missing}）。通常再跑一次就會好；也可以在右邊說明要怎麼處理。` : 'AI 這一輪出錯了。可以再跑一次，或在右邊說明要怎麼處理。';
   const go = async () => { setBusy(true); try { await api.retry(id); } finally { setBusy(false); } };
   return (
     <div className={`banner ${cancelled || restarted ? 'warn' : 'bad'} fade-in`}>
