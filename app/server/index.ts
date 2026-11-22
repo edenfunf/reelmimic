@@ -22,6 +22,8 @@ type Upload = Express.Multer.File;
 const fileName = (f: Upload) => safeName(Buffer.from(f.originalname, 'latin1').toString('utf8'));
 const safeName = (n: string) => n.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 120);
 const isUrl = (s: string | undefined) => /^https?:\/\/\S+$/i.test((s || '').trim());
+// multer writes every file to .uploads/ before the handler runs: a rejected request must delete them, or a 2 GB reference stays behind
+const dropUploads = (req: Request) => { const f = req.files; for (const u of Array.isArray(f) ? f : Object.values(f || {}).flat()) try { unlinkSync(u.path); } catch {} };
 const guard = (res: Response, id: string) => { if (!/^[\w-]+$/.test(id) || !existsSync(join(J.dirOf(id), 'job.json'))) { res.status(404).json({ error: 'no such project' }); return false; } return true; };
 
 // Answers as soon as the server is listening: start.bat / start.sh poll it before opening the browser
@@ -34,17 +36,15 @@ app.get('/api/projects', (req, res) => res.json(J.listJobs()));
 app.post('/api/projects', upload.fields([{ name: 'reference', maxCount: 1 }, { name: 'inputs', maxCount: 20 }]), (req, res) => {
   const { url, brief = '', agent = 'claude', title } = req.body, lang = ['zh-TW', 'en', 'zh-CN'].includes(req.body.lang) ? req.body.lang : 'zh-TW';
   const files = req.files as Record<string, Upload[]> | undefined, ref = files?.reference?.[0];
-  if (!ref && !isUrl(url)) return res.status(400).json({ error: '請上傳參考影片或貼上影片連結' });
-  if (ref && !J.isVideoName(ref.originalname)) {
-    for (const f of Object.values(files || {}).flat()) try { unlinkSync(f.path); } catch {}
-    return res.status(400).json({ error: `這看起來不像影片檔，請上傳影片格式（${J.REFERENCE_EXTS.join(' ')}）` });
-  }
-  if (!['claude', 'codex'].includes(agent)) return res.status(400).json({ error: 'agent 必須是 claude 或 codex' });
-  if (/�/.test(brief + (title || ''))) return res.status(400).json({ error: '需求文字編碼錯誤（請用 UTF-8 送出）' });
+  const reject = (error: string) => { dropUploads(req); res.status(400).json({ error }); };
+  if (!ref && !isUrl(url)) return reject('請上傳參考影片或貼上影片連結');
+  if (ref && !J.isVideoName(ref.originalname)) return reject(`這看起來不像影片檔，請上傳影片格式（${J.REFERENCE_EXTS.join(' ')}）`);
+  if (!['claude', 'codex'].includes(agent)) return reject('agent 必須是 claude 或 codex');
+  if (/�/.test(brief + (title || ''))) return reject('需求文字編碼錯誤（請用 UTF-8 送出）');
   // optional review/fix round limits for this project (castRounds, chunkRounds, finalRounds: whole numbers 1–10)
   let settings;
   try { settings = Object.fromEntries(Object.entries(J.cleanRounds(req.body)).filter(([, v]) => v != null)); }
-  catch (e) { for (const f of Object.values(files || {}).flat()) try { unlinkSync(f.path); } catch {} return res.status(400).json({ error: (e as Error).message }); }
+  catch (e) { return reject((e as Error).message); }
   const quality = ['fast', 'standard', 'fine'].includes(req.body.quality) ? req.body.quality : undefined;   // undefined → DEFAULT_QUALITY
   const id = slug();
   const job = J.createJob({ id, title: J.projectTitle(title, brief, lang), agent, brief, lang, settings, quality,
@@ -60,7 +60,7 @@ app.get('/api/projects/:id', (req, res) => { if (guard(res, req.params.id)) res.
 // Extra inputs later (e.g. the user finds their song file during plan review).
 // ?to=attachments → chat attachments (inputs/attachments/, timestamped so repeats don't overwrite); returns the saved paths
 app.post('/api/projects/:id/inputs', upload.array('inputs', 20), async (req, res) => {
-  if (!guard(res, req.params.id)) return;
+  if (!guard(res, req.params.id)) return dropUploads(req);
   const attach = req.query.to === 'attachments', sub = attach ? join('inputs', 'attachments') : 'inputs';
   mkdirSync(join(J.dirOf(req.params.id), sub), { recursive: true });
   const saved = [];
