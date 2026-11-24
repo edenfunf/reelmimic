@@ -27,8 +27,16 @@ except Exception:
     _s2t = lambda s: s
 
 KEEP = re.compile(r"[\w\u3400-\u9fff]", re.UNICODE)
+# Arabic: speech recognition returns undiacritised text with one spelling per letter family, while the user's lyrics carry
+# tashkeel, tatweel and any alef / ya / ta-marbuta spelling. Fold both sides to the same skeleton or the matcher scores
+# a perfectly sung line as a miss. (Other scripts are untouched.)
+_AR_DROP = dict.fromkeys(map(ord, "\u0640\u0670"))                      # tatweel, dagger alif
+_AR_FOLD = {ord(c): "\u0627" for c in "\u0623\u0625\u0622\u0671"}    # alef variants -> bare alef
+_AR_FOLD.update({ord("\u0649"): "\u064a", ord("\u0629"): "\u0647"})    # alef maqsura -> ya, ta marbuta -> ha
+def _ar_fold(s):
+    return s.translate(_AR_DROP).translate(_AR_FOLD) if re.search(r"[\u0600-\u06ff]", s) else s
 def norm_chars(s):
-    return [c.lower() for c in _s2t(s) if KEEP.match(c)]
+    return [c.lower() for c in _ar_fold(_s2t(s)) if KEEP.match(c)]
 
 
 def transcribe(wav, model_name, lang):
