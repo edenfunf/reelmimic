@@ -241,10 +241,11 @@ async function resumeFlow(id: string) {
 export const accept = (id: string) => run(id, () => acceptFlow(id));
 async function acceptFlow(id: string) {
   const j = load(id), ph = j.pipeline?.cast && !j.pipeline.cast.pass ? 'cast' : j.pipeline?.phase;
+  const text = ph === 'cast' ? L(id, '你接受了目前的角色設定，繼續製作鏡頭。', 'You accepted the cast as is; building the shots next.') : L(id, '你接受了目前的鏡頭，繼續組裝。', 'You accepted the shots as they are; assembling next.');
   update(id, (x) => { x.needs = []; x.error = null; x.failed = null;
     if (ph === 'cast') x.pipeline.cast = { round: 0, ...x.pipeline.cast, pass: true, state: 'passed', acceptedByUser: true };
     if (ph === 'shots') for (const c of Object.values(x.pipeline.chunks || {})) if (c.state !== 'passed') Object.assign(c, { state: 'passed', acceptedByUser: true });
-    x.chat.push({ role: 'system', text: ph === 'cast' ? '你接受了目前的角色設定，繼續製作鏡頭。' : '你接受了目前的鏡頭，繼續組裝。', ts: now() }); });
+    x.chat.push({ role: 'system', text, ts: now() }); });
   if (ph === 'final' || (j.stage === 'done')) return;
   if (await production(id)) await finalPanel(id);
 }
